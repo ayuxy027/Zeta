@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+/* CSS Variables for Changelog Template */
+:root {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --border: #e5e7eb;
+  --border-foreground: #0a0a0a;
+  --muted: #f0f0f0;
+  --muted-foreground: #6b7280;
+  --primary: #3b82f6;
+  --primary-foreground: #f9fafb;
+  --secondary: #f9fafb;
+  --secondary-foreground: #0a0a0a;
+  --accent: #f0f0f0;
+  --accent-foreground: #0a0a0a;
+  --ring: #3b82f6;
+  --radius: 0.5rem;
+  --chart-1: #ad6eca;
+  --chart-2: #f58e8e;
+  --chart-3: #f9d3a9;
+  --chart-4: #c4d899;
+  --chart-5: #6cc0a9;
+}
+
+/* Global Styles */
+html {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  letter-spacing: -0.03em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  letter-spacing: -0.03em;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+* {
+  letter-spacing: -0.03em;
+}
+
+/* Orbit Animation */
+@keyframes orbit {
+  from {
+    transform: translate(-50%, -50%) rotate(calc(var(--angle, 0) * 1deg)) translateX(var(--radius, 160px)) rotate(calc(var(--angle, 0) * -1deg));
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(calc(var(--angle, 0) * 1deg + 360deg)) translateX(var(--radius, 160px)) rotate(calc(var(--angle, 0) * -1deg - 360deg));
+  }
+}
+
+.animate-orbit {
+  animation: orbit var(--duration, 20s) linear infinite;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+}
+
+/* Beam Animation - traveling along path */
+@keyframes beam {
+  0% {
+    stroke-dashoffset: 1500;
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  90% {
+    opacity: 0.5;
+  }
+  100% {
+    stroke-dashoffset: -1500;
+    opacity: 0;
+  }
+}
+
+.path-beam {
+  stroke-dasharray: 10 1490;
+  animation: beam 8s ease-in-out infinite;
+}
+
+.path-beam-reverse {
+  stroke-dasharray: 10 1490;
+  animation: beam 8s ease-in-out infinite reverse;
+}
+
+/* Changelog Content Styling - custom implementation of prose */
+.changelog-content {
+  max-width: 100%;
+  color: var(--foreground);
+}
+
+.changelog-content p {
+  margin-top: 1.1428571429em;
+  margin-bottom: 1.1428571429em;
+  line-height: 1.7142857143;
+  letter-spacing: -0.03em;
+}
+
+.changelog-content h1,
+.changelog-content h2,
+.changelog-content h3,
+.changelog-content h4,
+.changelog-content h5,
+.changelog-content h6 {
+  margin-top: 1.3333333333em;
+  margin-bottom: 0.6666666667em;
+  font-weight: 600;
+  line-height: 1.3333333333;
+  letter-spacing: -0.03em;
+}
+
+.changelog-content h1 {
+  font-size: 2em;
+}
+
+.changelog-content h2 {
+  font-size: 1.5em;
+}
+
+.changelog-content h3 {
+  font-size: 1.25em;
+}
+
+.changelog-content h4 {
+  font-size: 1em;
+}
+
+.changelog-content h5 {
+  font-size: 0.875em;
+}
+
+.changelog-content h6 {
+  font-size: 0.75em;
+}
+
+.changelog-content ul,
+.changelog-content ol {
+  margin-top: 1.1428571429em;
+  margin-bottom: 1.1428571429em;
+  padding-left: 1.6em;
+}
+
+.changelog-content li {
+  padding-left: 0.375em;
+  margin-top: 0.2857142857em;
+  margin-bottom: 0.2857142857em;
+  line-height: 1.7142857143;
+}
+
+.changelog-content li::marker {
+  color: var(--muted-foreground);
+}
+
+.changelog-content ul { 
+  list-style-type: disc;
+}
+
+.changelog-content ol { 
+  list-style-type: decimal;
+}
+
+.changelog-content a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.changelog-content a:hover {
+  text-decoration: underline;
+}
+
+.changelog-content pre {
+  border-radius: calc(var(--radius) + 0.5rem);
+  background-color: var(--muted);
+  padding: 1.1428571429em;
+  overflow-x: auto;
+  font-size: 0.875em;
+  line-height: 1.7142857143;
+  margin-top: 1.1428571429em;
+  margin-bottom: 1.1428571429em;
+}
+
+.changelog-content code {
+  font-size: 0.875em;
+  line-height: 1.7142857143;
+  padding: 0.1428571429em 0.4285714286em;
+  border-radius: calc(var(--radius) - 0.25rem);
+  background-color: var(--muted);
+}
+
+.changelog-content :where(h1, h2, h3, h4, h5, h6):not(:first-child) {
+  margin-top: 1.3333333333em;
+}
+
+.changelog-content :where(h1, h2, h3, h4, h5, h6) + * {
+  margin-top: 0.6666666667em;
+}
