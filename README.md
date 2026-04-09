@@ -72,6 +72,7 @@ Built specifically for startups, not enterprise. Affordable. Works for solo foun
 ## Getting Started
 
 ```bash
+cd frontend
 npm install && npm run dev
 # Visit localhost:5173
 ```
