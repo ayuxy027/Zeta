@@ -65,20 +65,15 @@ Built specifically for startups, not enterprise. Affordable. Works for solo foun
 **Frontend**: React 19 + TypeScript + Tailwind CSS  
 **AI**: Groq SDK (Meta Llama) + multi-LLM routing  
 **Audio**: Web Speech API + Deepgram  
-**Backend**: Node.js + Python FastAPI  
-**Database**: SQLite → PostgreSQL with vector search  
+**Current Mode**: Frontend design-only (no backend integration)  
 
 ---
 
 ## Getting Started
 
 ```bash
-# Frontend
 npm install && npm run dev
 # Visit localhost:5173
-
-# Backend
-cd backend && npm install && npm run dev
 ```
 
 ---
