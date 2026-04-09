@@ -1,14 +1,13 @@
 import React from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { isAuthConfigured } from './config';
+import { useAuth } from './AuthContext';
 
 interface RequireAuthProps {
   children: React.ReactNode;
 }
 
-const RequireAuthWithProvider: React.FC<RequireAuthProps> = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth0();
+const RequireAuth: React.FC<RequireAuthProps> = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -24,14 +23,6 @@ const RequireAuthWithProvider: React.FC<RequireAuthProps> = ({ children }) => {
   }
 
   return <>{children}</>;
-};
-
-const RequireAuth: React.FC<RequireAuthProps> = ({ children }) => {
-  if (!isAuthConfigured()) {
-    return <>{children}</>;
-  }
-
-  return <RequireAuthWithProvider>{children}</RequireAuthWithProvider>;
 };
 
 export default RequireAuth;

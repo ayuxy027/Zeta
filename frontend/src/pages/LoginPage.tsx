@@ -1,14 +1,13 @@
 import React from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { AUTH_SCOPE, isAuthConfigured } from '../auth/config';
+import { useAuth } from '../auth/AuthContext';
 
 type LoginLocationState = {
   from?: string;
 };
 
-const LoginPageWithAuth: React.FC = () => {
-  const { loginWithRedirect, isLoading, isAuthenticated, user } = useAuth0();
+const LoginPage: React.FC = () => {
+  const { login, isLoading, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as LoginLocationState | null;
@@ -20,15 +19,8 @@ const LoginPageWithAuth: React.FC = () => {
     }
   }, [from, isAuthenticated, navigate]);
 
-  const handleLogin = async () => {
-    await loginWithRedirect({
-      authorizationParams: {
-        scope: AUTH_SCOPE,
-      },
-      appState: {
-        returnTo: from,
-      },
-    });
+  const handleLogin = () => {
+    login(from);
   };
 
   return (
@@ -58,31 +50,6 @@ const LoginPageWithAuth: React.FC = () => {
       </div>
     </div>
   );
-};
-
-const LoginPage: React.FC = () => {
-  if (!isAuthConfigured()) {
-    return (
-      <div className="px-4 py-16 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-2xl card p-10">
-          <h1 className="text-3xl font-bold font-display text-vintage-black mb-3">Auth Not Configured</h1>
-          <p className="text-vintage-gray-700 mb-4">
-            Add these values to <code>frontend/.env</code>:
-          </p>
-          <pre className="text-sm bg-vintage-gray-100 p-4 rounded-lg overflow-auto">
-{`VITE_AUTH0_DOMAIN=your-tenant.auth0.com
-VITE_AUTH0_CLIENT_ID=your-client-id
-VITE_AUTH0_AUDIENCE=your-api-audience-optional`}
-          </pre>
-          <p className="text-sm text-vintage-gray-600 mt-4">
-            Current redirect URI should be: <code>{window.location.origin}/login</code>
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return <LoginPageWithAuth />;
 };
 
 export default LoginPage;

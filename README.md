@@ -63,15 +63,19 @@ Built specifically for startups, not enterprise. Affordable. Works for solo foun
 ## Tech Stack
 
 **Frontend**: React 19 + TypeScript + Tailwind CSS  
+**Backend**: Node.js + Express + TypeScript  
+**Auth**: Auth0 via server-side OIDC session  
 **AI**: Groq SDK (Meta Llama) + multi-LLM routing  
 **Audio**: Web Speech API + Deepgram  
-**Current Mode**: Frontend design-only (no backend integration)  
 
 ---
 
 ## Getting Started
 
 ```bash
+cd backend
+npm install && npm run dev
+
 cd frontend
 npm install && npm run dev
 # Visit localhost:5173
@@ -79,15 +83,28 @@ npm install && npm run dev
 
 ## OAuth Setup (Auth0)
 
+Create `backend/.env` from `backend/.env.example` and set:
+
+```bash
+PORT=3001
+FRONTEND_URL=http://localhost:5173
+AUTH0_ISSUER_BASE_URL=https://your-tenant.us.auth0.com
+AUTH0_BASE_URL=http://localhost:3001
+AUTH0_CLIENT_ID=your-client-id
+AUTH0_CLIENT_SECRET=your-client-secret
+AUTH0_SECRET=replace-with-a-long-random-secret
+```
+
 Create `frontend/.env` with:
 
 ```bash
-VITE_AUTH0_DOMAIN=your-tenant.auth0.com
-VITE_AUTH0_CLIENT_ID=your-auth0-client-id
-VITE_AUTH0_AUDIENCE=your-api-audience-optional
+VITE_BACKEND_URL=http://localhost:3001
 ```
 
-Use `http://localhost:5173/login` as the allowed callback URL in Auth0.
+In Auth0 app settings, add:
+- Allowed Callback URL: `http://localhost:3001/auth/callback`
+- Allowed Logout URL: `http://localhost:5173`
+- Allowed Web Origin: `http://localhost:5173`
 
 ---
 
