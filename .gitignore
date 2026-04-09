@@ -117,3 +117,7 @@ coverage/
 *.aab
 *.keystore
 .vercel
+
+#gcloud
+.gcloud
+.DS_Store

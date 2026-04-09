@@ -77,6 +77,18 @@ npm install && npm run dev
 # Visit localhost:5173
 ```
 
+## OAuth Setup (Auth0)
+
+Create `frontend/.env` with:
+
+```bash
+VITE_AUTH0_DOMAIN=your-tenant.auth0.com
+VITE_AUTH0_CLIENT_ID=your-auth0-client-id
+VITE_AUTH0_AUDIENCE=your-api-audience-optional
+```
+
+Use `http://localhost:5173/login` as the allowed callback URL in Auth0.
+
 ---
 
 **Built for PMs who ship. Not for paperwork.**

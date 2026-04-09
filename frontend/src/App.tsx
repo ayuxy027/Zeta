@@ -7,6 +7,8 @@ import AboutPage from './pages/AboutPage';
 import ChangelogPage from './pages/ChangelogPage';
 import BlogPage from './pages/BlogPage';
 import DashboardPage from './pages/DashboardPage';
+import LoginPage from './pages/LoginPage';
+import RequireAuth from './auth/RequireAuth';
 
 const ScrollToTop: React.FC = () => {
   const { pathname } = useLocation();
@@ -25,11 +27,19 @@ const App: React.FC = () => {
       <Navbar />
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/changelog" element={<ChangelogPage />} />
         <Route path="/blog" element={<BlogPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route
+          path="/dashboard"
+          element={(
+            <RequireAuth>
+              <DashboardPage />
+            </RequireAuth>
+          )}
+        />
       </Routes>
     </div>
   );
