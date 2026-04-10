@@ -5,6 +5,7 @@ import oidc from "express-openid-connect";
 import slackRouter from "./routers/slack.router.js";
 import { initDb } from "./db/pool.js";
 import { createDriveIngestRouter } from "./routes/driveIngest.js";
+import { createGmailRouter } from "./routes/gmail.js";
 import { prisma } from "./lib/prisma.js";
 
 const port = Number(process.env.PORT ?? 3001);
@@ -244,6 +245,7 @@ app.get(
 );
 
 app.use("/api", createDriveIngestRouter());
+app.use("/api", createGmailRouter());
 
 async function start() {
   await initDb();

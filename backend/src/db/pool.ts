@@ -46,7 +46,15 @@ export async function initDb(): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS document_extractions_user_sub_idx
       ON document_extractions (user_sub);
+
+    CREATE TABLE IF NOT EXISTS google_mail_connections (
+      user_sub TEXT PRIMARY KEY,
+      refresh_token_encrypted TEXT NOT NULL,
+      google_email TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
-  console.log('[db] Migrations applied (google_drive_connections, document_extractions).');
+  console.log('[db] Migrations applied (google_drive_connections, google_mail_connections, document_extractions).');
 }
