@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Link2, Unlink } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   fetchGoogleWorkspaceStatus,
   disconnectGoogleWorkspace,
@@ -12,14 +13,342 @@ import {
   type SlackStatus,
 } from '../api/integrations';
 
+// ── Sub-messages per data source ───────────────────────────────────────────
+const SUB_MSGS: Record<string, string[]> = {
+  Gmail:    ['Fetching inbox…', 'Scanning threads…', 'Indexing labels…', 'Reading attachments…', 'Parsing drafts…'],
+  Drive:    ['Scanning files…', 'Indexing docs…', 'Reading metadata…', 'Processing folders…', 'Syncing revisions…'],
+  Calendar: ['Fetching events…', 'Syncing meetings…', 'Reading invites…', 'Processing recurrence…'],
+  Channels: ['Fetching history…', 'Indexing threads…', 'Scanning members…', 'Reading reactions…'],
+  Alerts:   ['Subscribing…', 'Configuring hooks…', 'Testing connection…', 'Activating listeners…'],
+};
+
+const rand = (min: number, max: number) => min + Math.random() * (max - min);
+
+// ── Types ──────────────────────────────────────────────────────────────────
+type StepState = 'pending' | 'syncing' | 'done';
+interface SyncStep { label: string; state: StepState; progress: number; duration: number; }
+
+// ── Sub-message cycling hook ───────────────────────────────────────────────
+function useSubMsg(label: string, active: boolean): string {
+  const msgs = SUB_MSGS[label] ?? ['Syncing…'];
+  const [idx, setIdx] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!active) { setIdx(0); return; }
+    const schedule = () => {
+      timerRef.current = setTimeout(() => {
+        setIdx((i) => (i + 1) % msgs.length);
+        schedule();
+      }, rand(900, 1800));
+    };
+    schedule();
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [active, label]);
+
+  return msgs[idx] ?? msgs[0] ?? 'Syncing…';
+}
+
+// ── Single step row ────────────────────────────────────────────────────────
+interface StepRowProps { step: SyncStep; accent: { bg: string; border: string; text: string; bar: string }; }
+
+const StepRow: React.FC<StepRowProps> = ({ step, accent }) => {
+  const subMsg = useSubMsg(step.label, step.state === 'syncing');
+  const isSyncing = step.state === 'syncing';
+  const isDone    = step.state === 'done';
+
+  return (
+    <motion.div
+      layout
+      animate={{
+        scale: isSyncing ? 1.018 : 1,
+        opacity: step.state === 'pending' ? 0.45 : 1,
+      }}
+      transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+      className="relative flex items-center gap-3 rounded-xl px-4 py-3 border overflow-hidden"
+      style={{
+        background: isSyncing ? accent.bg : isDone ? 'rgba(236,253,245,0.7)' : '#f9fafb',
+        borderColor: isSyncing ? accent.border : isDone ? '#a7f3d0' : '#f3f4f6',
+        boxShadow: isSyncing ? `0 2px 12px 0 ${accent.border}55` : 'none',
+      }}
+    >
+      {/* Dot / Spinner / Check */}
+      <div className="w-5 h-5 flex items-center justify-center shrink-0">
+        {isSyncing ? (
+          <span className="flex gap-[3px] items-end">
+            {[0, 1, 2].map((i) => (
+              <motion.span
+                key={i}
+                className="w-[4px] rounded-full"
+                style={{ backgroundColor: accent.text }}
+                animate={{ height: ['4px', '12px', '4px'] }}
+                transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.15, ease: 'easeInOut' }}
+              />
+            ))}
+          </span>
+        ) : isDone ? (
+          <motion.svg
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+            className="w-4 h-4"
+            viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth={3}
+          >
+            <motion.path
+              strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
+            />
+          </motion.svg>
+        ) : (
+          <span className="w-2 h-2 rounded-full bg-gray-300 block" />
+        )}
+      </div>
+
+      {/* Label + sub-message */}
+      <div className="flex-1 min-w-0">
+        <span
+          className="text-sm font-semibold tracking-tight"
+          style={{ color: isSyncing ? accent.text : isDone ? '#065f46' : '#9ca3af' }}
+        >
+          {step.label}
+        </span>
+        <AnimatePresence mode="wait">
+          {isSyncing && (
+            <motion.p
+              key={subMsg}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.25 }}
+              className="text-[10px] font-medium mt-0.5"
+              style={{ color: accent.text, opacity: 0.75 }}
+            >
+              {subMsg}
+            </motion.p>
+          )}
+          {isDone && (
+            <motion.p
+              key="done"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-[10px] font-medium text-emerald-600 mt-0.5"
+            >
+              Complete
+            </motion.p>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Percentage badge */}
+      <AnimatePresence>
+        {isSyncing && (
+          <motion.span
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="text-[11px] font-bold tabular-nums shrink-0"
+            style={{ color: accent.text }}
+          >
+            {Math.round(step.progress * 100)}%
+          </motion.span>
+        )}
+        {isDone && (
+          <motion.span
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-[11px] font-bold text-emerald-600 shrink-0"
+          >
+            ✓ Synced
+          </motion.span>
+        )}
+      </AnimatePresence>
+
+      {/* Bottom progress bar */}
+      <AnimatePresence>
+        {isSyncing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute bottom-0 left-0 right-0 h-[2px] overflow-hidden rounded-b-xl"
+          >
+            <motion.div
+              className="h-full rounded-full"
+              style={{ background: `linear-gradient(90deg, ${accent.border}, ${accent.text}, ${accent.border})`, backgroundSize: '200% 100%' }}
+              initial={{ width: '0%' }}
+              animate={{ width: `${step.progress * 100}%` }}
+              transition={{ duration: 0.1, ease: 'linear' }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
+// ── Module-level cache — survives React navigation (component unmount/remount) ─
+// Keyed by connection identity (email / teamId). Cleared on disconnect.
+const pipelineCache = new Map<string, { steps: SyncStep[]; done: boolean }>();
+
+// Status cache — prevents reload flicker & animation restart on tab switch
+let cachedGoogleStatus: GoogleWorkspaceStatus | null = null;
+let cachedSlackStatus: SlackStatus | null = null;
+
+// ── Pipeline phase ─────────────────────────────────────────────────────────
+interface Phase {
+  idx: number;
+  effectiveStart: number;
+  pausing: boolean;
+  pauseDur: number;
+  stalling: boolean;
+  stallStart: number;
+  stallDur: number;
+  stallAt: number;
+  hasStall: boolean;
+  done: boolean;
+}
+
+function makePhase(idx: number): Phase {
+  return {
+    idx,
+    effectiveStart: Date.now(),
+    pausing: false,
+    pauseDur: rand(900, 1800),
+    stalling: false,
+    stallStart: 0,
+    stallDur: rand(2500, 5000),
+    stallAt: rand(0.28, 0.72),
+    hasStall: Math.random() < 0.65,
+    done: false,
+  };
+}
+
+function useSyncPipeline(labels: string[], active: boolean, cacheKey: string): SyncStep[] {
+  const blankSteps = (): SyncStep[] =>
+    labels.map((l) => ({ label: l, state: 'pending' as StepState, progress: 0, duration: rand(5000, 11000) }));
+
+  // Read from cache immediately (no active guard) so remounts show cached state before API responds
+  const [steps, setSteps] = useState<SyncStep[]>(() => {
+    const cached = pipelineCache.get(cacheKey);
+    return cached ? cached.steps.map((s) => ({ ...s })) : blankSteps();
+  });
+
+  const phaseRef = useRef<Phase>(makePhase(0));
+  const rafRef   = useRef<number | null>(null);
+
+  // Write to cache after every steps change
+  useEffect(() => {
+    if (!cacheKey) return;
+    pipelineCache.set(cacheKey, { steps, done: steps.every((s) => s.state === 'done') });
+  }, [steps, cacheKey]);
+
+  useEffect(() => {
+    if (!active) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      // Do NOT delete cache here — only delete on explicit disconnect (see handlers below)
+      setSteps(blankSteps());
+      return;
+    }
+
+    const cached = pipelineCache.get(cacheKey);
+
+    // Already fully done — restore state, skip RAF entirely
+    if (cached?.done) {
+      setSteps(cached.steps.map((s) => ({ ...s })));
+      return;
+    }
+
+    // Find first step that isn't done yet (resume point)
+    const resumeIdx = cached
+      ? Math.max(0, cached.steps.findIndex((s) => s.state !== 'done'))
+      : 0;
+
+    phaseRef.current = makePhase(resumeIdx);
+
+    setSteps(labels.map((l, i) => {
+      // Preserve completed steps from cache
+      if (cached && i < resumeIdx) {
+        return cached.steps[i] ?? { label: l, state: 'done' as StepState, progress: 1, duration: 0 };
+      }
+      return {
+        label: l,
+        state: i === resumeIdx ? 'syncing' as StepState : 'pending' as StepState,
+        progress: 0,
+        duration: rand(5000, 11000),
+      };
+    }));
+
+    const tick = () => {
+      const p = phaseRef.current;
+      if (p.done || p.idx >= labels.length) return;
+
+      const now = Date.now();
+
+      setSteps((prev) => {
+        const next = prev.map((s) => ({ ...s }));
+
+        if (p.pausing) {
+          if (now - p.effectiveStart >= p.pauseDur) {
+            const nxt = p.idx + 1;
+            if (nxt >= labels.length) {
+              phaseRef.current = { ...p, done: true };
+              return next;
+            }
+            phaseRef.current = makePhase(nxt);
+            next[nxt] = { ...next[nxt]!, state: 'syncing', progress: 0, duration: rand(5000, 11000) };
+          }
+          return next;
+        }
+
+        if (p.stalling) {
+          const stallElapsed = now - p.stallStart;
+          if (stallElapsed >= p.stallDur) {
+            phaseRef.current = { ...p, stalling: false, effectiveStart: p.effectiveStart + stallElapsed };
+          }
+          return next;
+        }
+
+        const dur = next[p.idx]?.duration ?? 7000;
+        const progress = Math.min((now - p.effectiveStart) / dur, 1);
+        const cur = next[p.idx];
+        if (!cur) return next;
+
+        if (p.hasStall && progress >= p.stallAt) {
+          phaseRef.current = { ...p, stalling: true, stallStart: now, hasStall: false };
+          next[p.idx] = { ...cur, state: 'syncing', progress: p.stallAt };
+          return next;
+        }
+
+        next[p.idx] = { ...cur, state: 'syncing', progress };
+
+        if (progress >= 1) {
+          next[p.idx] = { ...cur, state: 'done', progress: 1 };
+          phaseRef.current = { ...p, pausing: true, effectiveStart: now };
+        }
+
+        return next;
+      });
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [active, cacheKey]);
+
+  return steps;
+}
+
 const ConnectorsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [googleStatus, setGoogleStatus] = React.useState<GoogleWorkspaceStatus | null>(null);
-  const [googleLoading, setGoogleLoading] = React.useState(true);
+  const [googleStatus, setGoogleStatus] = React.useState<GoogleWorkspaceStatus | null>(cachedGoogleStatus);
+  const [googleLoading, setGoogleLoading] = React.useState(!cachedGoogleStatus);
 
-  const [slackStatus, setSlackStatus] = React.useState<SlackStatus | null>(null);
-  const [slackLoading, setSlackLoading] = React.useState(true);
+  const [slackStatus, setSlackStatus] = React.useState<SlackStatus | null>(cachedSlackStatus);
+  const [slackLoading, setSlackLoading] = React.useState(!cachedSlackStatus);
 
   const [error, setError] = React.useState<string | null>(null);
   const [banner, setBanner] = React.useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -35,10 +364,13 @@ const ConnectorsPage: React.FC = () => {
   // ── Load statuses ────────────────────────────────────────────────────────
 
   const loadGoogleStatus = React.useCallback(async () => {
-    setGoogleLoading(true);
+    if (!cachedGoogleStatus) setGoogleLoading(true);
     try {
       const s = await fetchGoogleWorkspaceStatus();
+      cachedGoogleStatus = s;
       setGoogleStatus(s);
+      // If previously connected but now disconnected, clear pipeline cache
+      if (!s.connected) pipelineCache.delete('google');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load Google Workspace status.');
     } finally {
@@ -47,10 +379,12 @@ const ConnectorsPage: React.FC = () => {
   }, []);
 
   const loadSlackStatus = React.useCallback(async () => {
-    setSlackLoading(true);
+    if (!cachedSlackStatus) setSlackLoading(true);
     try {
       const s = await fetchSlackStatus();
+      cachedSlackStatus = s;
       setSlackStatus(s);
+      if (!s.connected) pipelineCache.delete('slack');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load Slack status.');
     } finally {
@@ -92,10 +426,14 @@ const ConnectorsPage: React.FC = () => {
   };
 
   const handleDisconnectGoogle = async () => {
+    pipelineCache.delete('google');
+    cachedGoogleStatus = null;
     setError(null);
     try {
       await disconnectGoogleWorkspace();
-      setGoogleStatus({ connected: false, email: null, scopes: null, connectedAt: null });
+      const s: GoogleWorkspaceStatus = { connected: false, email: null, scopes: null, connectedAt: null };
+      cachedGoogleStatus = s;
+      setGoogleStatus(s);
       setBanner({ type: 'success', message: 'Google Workspace disconnected.' });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to disconnect Google Workspace.');
@@ -107,15 +445,35 @@ const ConnectorsPage: React.FC = () => {
   };
 
   const handleDisconnectSlack = async () => {
+    pipelineCache.delete('slack');
+    cachedSlackStatus = null;
     setError(null);
     try {
       await disconnectSlack();
-      setSlackStatus({ connected: false, teamId: null, teamName: null, scopes: null, connectedAt: null });
+      const s: SlackStatus = { connected: false, teamId: null, teamName: null, scopes: null, connectedAt: null };
+      cachedSlackStatus = s;
+      setSlackStatus(s);
       setBanner({ type: 'success', message: 'Slack disconnected.' });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to disconnect Slack.');
     }
   };
+
+  // ── Sync pipelines ────────────────────────────────────────────────────
+
+  const googleSteps = useSyncPipeline(
+    ['Gmail', 'Drive', 'Calendar'],
+    googleStatus?.connected ?? false,
+    'google',
+  );
+  const slackSteps = useSyncPipeline(
+    ['Channels', 'Alerts'],
+    slackStatus?.connected ?? false,
+    'slack',
+  );
+
+  const allGoogleDone = googleSteps.every((s) => s.state === 'done');
+  const allSlackDone = slackSteps.every((s) => s.state === 'done');
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -242,53 +600,37 @@ const ConnectorsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Connected State Dashboard panel */}
+          {/* Connected — sequential sync panel */}
           {!googleLoading && googleStatus?.connected && (
-            <div className="bg-gray-50/50 p-4 md:px-8 md:py-5 border-t border-gray-100">
-              <div className="flex flex-row items-center gap-5 overflow-x-auto no-scrollbar py-1">
-                
-                {/* Connection Status & Email */}
-                {googleStatus.email && (
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <span className="relative flex h-2.5 w-2.5 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                    </span>
-                    <p className="text-gray-900 font-medium text-sm">{googleStatus.email}</p>
-                  </div>
-                )}
-
-                <div className="w-px h-8 bg-gray-200 shrink-0 hidden md:block"></div>
-
-                {/* Scopes Cards */}
-                <div className="flex flex-row items-center gap-3 shrink-0">
-                  <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-xl shadow-sm transition-transform hover:scale-105">
-                    <img src="/assets/icons/gmail-svgrepo-com.svg" className="w-5 h-5 object-contain" alt="Gmail" />
-                    <div className="flex flex-col pr-1">
-                      <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider leading-none mb-1">Connected</span>
-                      <span className="text-sm font-bold text-gray-900 leading-none">Gmail</span>
-                    </div>
-                    <svg className="w-4 h-4 text-emerald-600 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-xl shadow-sm transition-transform hover:scale-105">
-                    <img src="/assets/icons/drive-color-svgrepo-com.svg" className="w-5 h-5 object-contain" alt="Drive" />
-                    <div className="flex flex-col pr-1">
-                      <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider leading-none mb-1">Connected</span>
-                      <span className="text-sm font-bold text-gray-900 leading-none">Drive</span>
-                    </div>
-                    <svg className="w-4 h-4 text-emerald-600 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                  </div>
-
-                  <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-xl shadow-sm transition-transform hover:scale-105">
-                    <svg viewBox="0 0 24 24" className="w-5 h-5 fill-blue-500"><path d="M19 4h-1V3a1 1 0 00-2 0v1H8V3a1 1 0 00-2 0v1H5a3 3 0 00-3 3v12a3 3 0 003 3h14a3 3 0 003-3V7a3 3 0 00-3-3zm1 15a1 1 0 01-1 1H5a1 1 0 01-1-1v-8h16v8zm0-10H4V7a1 1 0 011-1h14a1 1 0 011 1v2z"/></svg>
-                    <div className="flex flex-col pr-1">
-                      <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider leading-none mb-1">Connected</span>
-                      <span className="text-sm font-bold text-gray-900 leading-none">Calendar</span>
-                    </div>
-                    <svg className="w-4 h-4 text-emerald-600 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                  </div>
+            <div className="bg-gray-50/50 px-4 md:px-8 py-5 border-t border-gray-100 space-y-3">
+              {googleStatus.email && (
+                <div className="flex items-center gap-2.5 mb-1">
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                  </span>
+                  <p className="text-gray-900 font-medium text-sm">{googleStatus.email}</p>
+                  <AnimatePresence>
+                    {allGoogleDone && (
+                      <motion.span
+                        initial={{ opacity: 0, x: 8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="ml-auto text-[10px] font-semibold text-emerald-600 uppercase tracking-widest"
+                      >
+                        All synced ✓
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </div>
+              )}
+              <div className="flex flex-col gap-2">
+                {googleSteps.map((step) => (
+                  <StepRow
+                    key={step.label}
+                    step={step}
+                    accent={{ bg: 'rgba(239,246,255,0.9)', border: '#93c5fd', text: '#1d4ed8', bar: '#3b82f6' }}
+                  />
+                ))}
               </div>
             </div>
           )}
@@ -334,51 +676,37 @@ const ConnectorsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Connected State Dashboard panel */}
+          {/* Connected — sequential sync panel */}
           {!slackLoading && slackStatus?.connected && (
-            <div className="bg-gray-50/50 p-4 md:px-8 md:py-5 border-t border-gray-100">
-              <div className="flex flex-row items-center gap-5 overflow-x-auto no-scrollbar py-1">
-                
-                {/* Connection Status & Team Name */}
-                {slackStatus.teamName && (
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <span className="relative flex h-2.5 w-2.5 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                    </span>
-                    <p className="text-gray-900 font-medium text-sm">{slackStatus.teamName}</p>
-                  </div>
-                )}
-
-                <div className="w-px h-8 bg-gray-200 shrink-0 hidden md:block"></div>
-
-                {/* Scopes Cards */}
-                <div className="flex flex-row items-center gap-3 shrink-0">
-                  <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-xl shadow-sm transition-transform hover:scale-105">
-                    <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                    <div className="flex flex-col pr-1">
-                      <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider leading-none mb-1">Streaming</span>
-                      <span className="text-sm font-bold text-gray-900 leading-none">Channels</span>
-                    </div>
-                    <span className="relative flex h-2 w-2 ml-1">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 px-4 py-2 rounded-xl shadow-sm transition-transform hover:scale-105">
-                    <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                    <div className="flex flex-col pr-1">
-                      <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider leading-none mb-1">Listening</span>
-                      <span className="text-sm font-bold text-gray-900 leading-none">Alerts</span>
-                    </div>
-                    <span className="relative flex h-2 w-2 ml-1">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                  </div>
+            <div className="bg-gray-50/50 px-4 md:px-8 py-5 border-t border-gray-100 space-y-3">
+              {slackStatus.teamName && (
+                <div className="flex items-center gap-2.5 mb-1">
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                  </span>
+                  <p className="text-gray-900 font-medium text-sm">{slackStatus.teamName}</p>
+                  <AnimatePresence>
+                    {allSlackDone && (
+                      <motion.span
+                        initial={{ opacity: 0, x: 8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="ml-auto text-[10px] font-semibold text-emerald-600 uppercase tracking-widest"
+                      >
+                        All synced ✓
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </div>
-
+              )}
+              <div className="flex flex-col gap-2">
+                {slackSteps.map((step) => (
+                  <StepRow
+                    key={step.label}
+                    step={step}
+                    accent={{ bg: 'rgba(245,240,255,0.9)', border: '#c4b5fd', text: '#4A154B', bar: '#7c3aed' }}
+                  />
+                ))}
               </div>
             </div>
           )}
