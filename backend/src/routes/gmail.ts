@@ -8,11 +8,17 @@ import {
 } from "../services/googleDriveClient.js";
 import { getPool } from "../db/pool.js";
 import { signOAuthState, verifyOAuthState } from "../lib/oauthState.js";
-import { encryptToken } from "../lib/tokenCrypto.js";
+import { encryptToken, decryptToken } from "../lib/tokenCrypto.js";
+import {
+  extractBestBodyText,
+  headersFromMessage,
+  pickHeader,
+} from "../lib/gmailParse.js";
 
 const { requiresAuth } = oidc;
 
 const MAX_LIST_RESULTS = 50;
+const METADATA_FETCH_CONCURRENCY = 10;
 
 function getFrontendUrl(): string {
   return process.env.FRONTEND_URL?.trim() ?? "http://localhost:5173";
@@ -43,6 +49,96 @@ function requireGoogleMailEnv(_req: Request, res: Response, next: () => void) {
       e instanceof Error ? e.message : "Google OAuth is not configured.";
     res.status(503).json({ error: message });
   }
+}
+
+type HttpishError = { response?: { status?: number; data?: unknown } };
+
+function isHttpishError(e: unknown): e is HttpishError {
+  return typeof e === "object" && e !== null && "response" in e;
+}
+
+function mapGmailError(e: unknown): { status: number; error: string; code?: string } {
+  if (isHttpishError(e) && e.response) {
+    const status = e.response.status ?? 502;
+    const reason = (e.response.data as { error?: { message?: string } })?.error
+      ?.message;
+    const msg =
+      typeof reason === "string" && reason.length > 0
+        ? reason
+        : (e as Error).message || "Gmail API request failed.";
+    if (status === 401 || status === 403) {
+      return {
+        status: 403,
+        error:
+          "Gmail access was denied or revoked. Disconnect and connect Gmail again.",
+        code: "gmail_auth",
+      };
+    }
+    if (status === 429) {
+      return {
+        status: 429,
+        error: "Gmail rate limit reached. Wait a moment and try again.",
+        code: "gmail_rate_limit",
+      };
+    }
+    return { status: status >= 400 && status < 600 ? status : 502, error: msg };
+  }
+  if (e instanceof Error) {
+    return { status: 500, error: e.message };
+  }
+  return { status: 500, error: "Unknown error" };
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = [];
+  for (let i = 0; i < items.length; i += limit) {
+    const chunk = items.slice(i, i + limit);
+    const part = await Promise.all(chunk.map((item) => fn(item)));
+    out.push(...part);
+  }
+  return out;
+}
+
+export type MailListItem = {
+  id: string;
+  threadId: string | null;
+  snippet: string | null;
+  subject: string | null;
+  from: string | null;
+  date: string | null;
+  labelIds: string[];
+};
+
+async function fetchMessageListItem(
+  gmail: ReturnType<typeof google.gmail>,
+  id: string,
+): Promise<MailListItem> {
+  const msg = await gmail.users.messages.get({
+    userId: "me",
+    id,
+    format: "metadata",
+    metadataHeaders: ["Subject", "From", "Date"],
+  });
+  const headers = msg.data.payload?.headers ?? [];
+  const pick = (name: string): string | null => {
+    const h = headers.find(
+      (x) => x.name?.toLowerCase() === name.toLowerCase(),
+    );
+    return typeof h?.value === "string" ? h.value : null;
+  };
+  return {
+    id,
+    threadId: msg.data.threadId ?? null,
+    snippet: msg.data.snippet ?? null,
+    subject: pick("Subject"),
+    from: pick("From"),
+    date: pick("Date"),
+    labelIds: msg.data.labelIds ?? [],
+  };
 }
 
 export function createGmailRouter() {
@@ -114,19 +210,33 @@ export function createGmailRouter() {
       try {
         const oauth2 = createOAuth2Client("mail");
         const { tokens } = await oauth2.getToken(code);
-        if (!tokens.refresh_token) {
+
+        let refreshToken = tokens.refresh_token;
+        if (!refreshToken) {
+          const { rows } = await pool.query<{ refresh_token_encrypted: string }>(
+            `SELECT refresh_token_encrypted FROM google_mail_connections WHERE user_sub = $1`,
+            [verified.sub],
+          );
+          const existing = rows[0];
+          if (existing?.refresh_token_encrypted) {
+            refreshToken = decryptToken(existing.refresh_token_encrypted);
+          }
+        }
+
+        if (!refreshToken) {
           res.redirect(`${frontend}/dashboard/mail?error=no_refresh_token`);
           return;
         }
-        oauth2.setCredentials(tokens);
+
+        oauth2.setCredentials({ ...tokens, refresh_token: refreshToken });
         const email = await fetchGmailProfileEmail(oauth2);
-        const encrypted = encryptToken(tokens.refresh_token);
+        const encrypted = encryptToken(refreshToken);
         await pool.query(
           `INSERT INTO google_mail_connections (user_sub, refresh_token_encrypted, google_email, updated_at)
          VALUES ($1, $2, $3, NOW())
          ON CONFLICT (user_sub) DO UPDATE SET
            refresh_token_encrypted = EXCLUDED.refresh_token_encrypted,
-           google_email = EXCLUDED.google_email,
+           google_email = COALESCE(EXCLUDED.google_email, google_mail_connections.google_email),
            updated_at = NOW()`,
           [verified.sub, encrypted, email],
         );
@@ -183,6 +293,42 @@ export function createGmailRouter() {
   );
 
   router.get(
+    "/mail/labels",
+    requiresAuth(),
+    requireDb,
+    requireGoogleMailEnv,
+    async (req: Request, res: Response) => {
+      const userSub = req.oidc.user?.sub;
+      if (!userSub) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const auth = await getOAuth2ClientForMailUser(userSub);
+      if (!auth) {
+        res.status(400).json({ error: "Gmail is not connected." });
+        return;
+      }
+      try {
+        const gmail = google.gmail({ version: "v1", auth });
+        const list = await gmail.users.labels.list({ userId: "me" });
+        const labels = (list.data.labels ?? [])
+          .filter((l): l is { id: string; name: string; type?: string | null } =>
+            Boolean(l.id && l.name),
+          )
+          .map((l) => ({
+            id: l.id as string,
+            name: l.name as string,
+            type: l.type ?? undefined,
+          }));
+        res.json({ labels });
+      } catch (e) {
+        const m = mapGmailError(e);
+        res.status(m.status).json({ error: m.error, code: m.code });
+      }
+    },
+  );
+
+  router.get(
     "/mail/messages",
     requiresAuth(),
     requireDb,
@@ -215,56 +361,110 @@ export function createGmailRouter() {
           ? req.query.pageToken
           : undefined;
 
+      const labelId =
+        typeof req.query.labelId === "string" && req.query.labelId.length > 0
+          ? req.query.labelId
+          : undefined;
+
+      const includeSpamTrash =
+        typeof req.query.includeSpamTrash === "string" &&
+        (req.query.includeSpamTrash === "1" || req.query.includeSpamTrash === "true");
+
       const gmail = google.gmail({ version: "v1", auth });
-      const list = await gmail.users.messages.list({
-        userId: "me",
-        q: q || undefined,
-        maxResults,
-        pageToken,
-      });
 
-      const ids = (list.data.messages ?? [])
-        .map((m) => m.id)
-        .filter((id): id is string => typeof id === "string");
-
-      const messages: Array<{
-        id: string;
-        threadId: string | null;
-        snippet: string | null;
-        subject: string | null;
-        from: string | null;
-        date: string | null;
-      }> = [];
-
-      for (const id of ids) {
-        const msg = await gmail.users.messages.get({
+      try {
+        const list = await gmail.users.messages.list({
           userId: "me",
-          id,
-          format: "metadata",
-          metadataHeaders: ["Subject", "From", "Date"],
+          q: q || undefined,
+          maxResults,
+          pageToken,
+          labelIds: labelId ? [labelId] : undefined,
+          includeSpamTrash,
         });
-        const headers = msg.data.payload?.headers ?? [];
-        const pick = (name: string): string | null => {
-          const h = headers.find(
-            (x) => x.name?.toLowerCase() === name.toLowerCase(),
-          );
-          return typeof h?.value === "string" ? h.value : null;
-        };
-        messages.push({
-          id,
-          threadId: msg.data.threadId ?? null,
-          snippet: msg.data.snippet ?? null,
-          subject: pick("Subject"),
-          from: pick("From"),
-          date: pick("Date"),
+
+        const ids = (list.data.messages ?? [])
+          .map((m) => m.id)
+          .filter((id): id is string => typeof id === "string");
+
+        const messages = await mapWithConcurrency(
+          ids,
+          METADATA_FETCH_CONCURRENCY,
+          (id) => fetchMessageListItem(gmail, id),
+        );
+
+        res.json({
+          messages,
+          nextPageToken: list.data.nextPageToken ?? null,
+          resultSizeEstimate: list.data.resultSizeEstimate ?? null,
         });
+      } catch (e) {
+        const m = mapGmailError(e);
+        res.status(m.status).json({ error: m.error, code: m.code });
+      }
+    },
+  );
+
+  router.get(
+    "/mail/messages/:messageId",
+    requiresAuth(),
+    requireDb,
+    requireGoogleMailEnv,
+    async (req: Request, res: Response) => {
+      const userSub = req.oidc.user?.sub;
+      if (!userSub) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const auth = await getOAuth2ClientForMailUser(userSub);
+      if (!auth) {
+        res.status(400).json({ error: "Gmail is not connected." });
+        return;
       }
 
-      res.json({
-        messages,
-        nextPageToken: list.data.nextPageToken ?? null,
-        resultSizeEstimate: list.data.resultSizeEstimate ?? null,
-      });
+      const rawId = req.params.messageId;
+      const messageId =
+        typeof rawId === "string"
+          ? rawId.trim()
+          : Array.isArray(rawId)
+            ? rawId[0]?.trim() ?? ""
+            : "";
+      if (!messageId) {
+        res.status(400).json({ error: "Missing message id." });
+        return;
+      }
+
+      const gmail = google.gmail({ version: "v1", auth });
+
+      try {
+        const msg = await gmail.users.messages.get({
+          userId: "me",
+          id: messageId,
+          format: "full",
+        });
+
+        const data = msg.data;
+        const headers = headersFromMessage(data);
+        const bodyText = extractBestBodyText(data.payload ?? undefined);
+
+        res.json({
+          id: data.id ?? messageId,
+          threadId: data.threadId ?? null,
+          snippet: data.snippet ?? null,
+          subject: pickHeader(headers, "Subject"),
+          from: pickHeader(headers, "From"),
+          to: pickHeader(headers, "To"),
+          date: pickHeader(headers, "Date"),
+          labelIds: data.labelIds ?? [],
+          bodyText,
+        });
+      } catch (e) {
+        const m = mapGmailError(e);
+        if (m.status === 404 || (isHttpishError(e) && e.response?.status === 404)) {
+          res.status(404).json({ error: "Message not found." });
+          return;
+        }
+        res.status(m.status).json({ error: m.error, code: m.code });
+      }
     },
   );
 
