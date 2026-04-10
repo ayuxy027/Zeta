@@ -140,6 +140,7 @@ app.use(
 
 app.use(
   express.json({
+    limit: "300mb",
     verify: (req, _res, buf) => {
       (req as unknown as Record<string, unknown>).rawBody = buf.toString("utf8");
     },

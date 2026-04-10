@@ -1,9 +1,11 @@
 import express, { type Request, type Response } from "express";
+import { randomUUID } from "node:crypto";
 import neo4j from "neo4j-driver";
 import { answerQuestion, buildInputFallback } from "../services/query.service.js";
 import { runPipeline } from "../pipeline/pipeline.js";
 import type { PipelinePayload } from "../pipeline/types.js";
 import { prisma } from "../lib/prisma.js";
+import { extractTextFromBuffer } from "../lib/extractText.js";
 
 const WINDOW_MS = 60_000;
 const RATE_LIMIT_PER_WINDOW = 120;
@@ -116,6 +118,121 @@ export function createQueryRouter() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Ingest failed";
       console.error("[ingest] Error:", message);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // Chat upload endpoint: PDF only, parse + pipeline ingest
+  router.post("/upload/pdf", async (req: Request, res: Response) => {
+    if (!checkRateLimit(`upload:${req.ip}`)) {
+      res.status(429).json({ error: "Too many upload requests. Please retry in a minute." });
+      return;
+    }
+
+    const body = req.body as {
+      fileName?: string;
+      mimeType?: string;
+      dataBase64?: string;
+    };
+
+    const fileName = (body.fileName ?? "uploaded.pdf").trim();
+    const mimeType = (body.mimeType ?? "application/pdf").trim();
+    const base64 = (body.dataBase64 ?? "").trim();
+
+    if (!base64) {
+      res.status(400).json({ error: "Missing PDF payload." });
+      return;
+    }
+
+    if (mimeType !== "application/pdf") {
+      res.status(400).json({ error: "Only PDF uploads are supported." });
+      return;
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64, "base64");
+    } catch {
+      res.status(400).json({ error: "Invalid base64 payload." });
+      return;
+    }
+
+    if (buffer.length === 0) {
+      res.status(400).json({ error: "Uploaded PDF is empty." });
+      return;
+    }
+
+    if (buffer.length > 250 * 1024 * 1024) {
+      res.status(413).json({ error: "PDF too large for this demo endpoint (max 250 MB)." });
+      return;
+    }
+
+    try {
+      const extracted = await extractTextFromBuffer(buffer, "application/pdf", fileName);
+      const text = extracted.text.trim();
+
+      if (!text) {
+        res.status(400).json({ error: "No extractable text found in PDF." });
+        return;
+      }
+
+      const sourceId = `upload_${randomUUID()}`;
+      const userSub = req.oidc.user?.sub ?? "demo-upload-user";
+      const timestamp = new Date().toISOString();
+
+      const payload: PipelinePayload = {
+        source_id: sourceId,
+        source_type: "drive",
+        raw_text: text,
+        metadata: {
+          author: userSub,
+          timestamp,
+          subject: fileName,
+          channel: "chat-upload",
+        },
+      };
+
+      const result = await runPipeline(payload);
+
+      try {
+        await prisma.ingestedDocument.upsert({
+          where: { sourceId },
+          update: {
+            rawText: text,
+            isRelevant: result.entities?.is_relevant ?? false,
+            decisions: result.entities?.decisions ?? [],
+            people: result.entities?.people ?? [],
+            topics: result.entities?.topics ?? [],
+          },
+          create: {
+            sourceId,
+            sourceType: "drive",
+            rawText: text,
+            author: userSub,
+            subject: fileName,
+            channel: "chat-upload",
+            timestamp,
+            isRelevant: result.entities?.is_relevant ?? false,
+            decisions: result.entities?.decisions ?? [],
+            people: result.entities?.people ?? [],
+            topics: result.entities?.topics ?? [],
+          },
+        });
+      } catch (dbErr) {
+        console.warn("[upload/pdf] Postgres persist failed:", (dbErr as Error).message);
+      }
+
+      res.json({
+        ok: true,
+        sourceId,
+        fileName,
+        charCount: text.length,
+        warnings: extracted.warnings,
+        entities: result.entities,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "PDF upload failed";
+      console.error("[upload/pdf] Error:", message);
       res.status(500).json({ error: message });
     }
   });

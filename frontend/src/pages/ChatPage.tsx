@@ -8,6 +8,7 @@ import {
   ChevronUp,
   Clock3,
   FileText,
+  GitBranch,
   ListChecks,
   Paperclip,
   Presentation,
@@ -124,10 +125,14 @@ const toReadableText = (value?: string) => {
   return text
     .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*/g, '')
     .replace(/^#{1,6}\s+/gm, '')
-    .replace(/^\s*[-*]\s+/gm, '')
+    .replace(/^\s*[-*]\s+/gm, '- ')
+    .replace(/^\s*---+\s*$/gm, '')
+    .replace(/^\s*•\s+/gm, '')
     .replace(/\r/g, '')
     .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
     .trim();
 };
 
@@ -135,18 +140,24 @@ const stripInlineSourceCitations = (value?: string) => {
   const text = (value ?? '').trim();
   if (!text) return text;
   return text
-    .replace(/\[(?:Source\s*\d+|Knowledge\s*Graph)(?:\s*,\s*Source\s*\d+)*\]/gi, '')
-    .replace(/\s{2,}/g, ' ')
+    .replace(/[\[{](?:Source|Sources)\s*[0-9\s,\-–to]+[\]}]/gi, '')
+    .replace(/[\[{]Knowledge\s*Graph[\]}]/gi, '')
+    .replace(/\(\s*(?:Source|Sources)\s*[0-9\s,\-–to]+\s*\)/gi, '')
+    .replace(/[ \t]{2,}/g, ' ')
     .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/\n\s*\n\s*\n+/g, '\n\n')
     .trim();
 };
 
-const shouldUseDetailedAsPrimary = (concise?: string) => {
-  const c = (concise ?? '').trim();
-  if (!c) return true;
-  if (/\b\d+\.\s*$/.test(c)) return true;
-  if (c.length < 70) return true;
-  return false;
+const formatMainResponse = (value?: string) => {
+  const cleaned = stripInlineSourceCitations(toReadableText(value));
+  if (!cleaned) return cleaned;
+
+  return cleaned
+    .replace(/(?:^|\n)\s*(\d+)\)\s+/g, '\n$1. ')
+    .replace(/(?:^|\n)\s*[-]\s+/g, '\n- ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 };
 
 const enrichDavidThinking = (
@@ -197,6 +208,12 @@ const extractSandyOnlyText = (text?: string) => {
 
   return value;
 };
+
+const sleepWithTimer = (ms: number, timersRef: React.MutableRefObject<number[]>) =>
+  new Promise<void>((resolve) => {
+    const timerId = window.setTimeout(() => resolve(), ms);
+    timersRef.current.push(timerId);
+  });
 
 const createIdleAgentFlow = (): AgentFlowState => ({
   activeAgent: 'idle',
@@ -293,7 +310,18 @@ const ChatPage: React.FC = () => {
   const [sandyViewMode, setSandyViewMode] = React.useState<'concise' | 'detailed'>('concise');
   const [analysisExpanded, setAnalysisExpanded] = React.useState(false);
   const [expandedSourceByMessage, setExpandedSourceByMessage] = React.useState<Record<string, number | null>>({});
-  const [focusInspector, setFocusInspector] = React.useState<'david' | 'sandy' | null>(null);
+  const [focusInspector, setFocusInspector] = React.useState<'david' | 'sandy' | 'visualize' | null>(null);
+  const [uploadingPdf, setUploadingPdf] = React.useState(false);
+  const [visualGraph, setVisualGraph] = React.useState<{
+    counts?: { decisions: number; people: number; topics: number; sources: number };
+    decisions?: Array<{ decision: string; people: string[]; topics: string[]; source: string; when: string }>;
+    distribution?: Record<string, number>;
+    error?: string;
+    mode?: 'live' | 'continuity';
+  } | null>(null);
+  const [visualLoading, setVisualLoading] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [uploadProgress, setUploadProgress] = React.useState(0);
 
   const timersRef = React.useRef<number[]>([]);
   const requestTokenRef = React.useRef(0);
@@ -388,6 +416,68 @@ const ChatPage: React.FC = () => {
       setAgentFlow((prev) => update(prev));
     }, delayMs);
     timersRef.current.push(timerId);
+  };
+
+  const revealAssistantMessage = async (
+    message: Message,
+    token: number,
+    requestStartedAt: number,
+  ): Promise<boolean> => {
+    const elapsed = Date.now() - requestStartedAt;
+    const minResponseDelayMs = 700;
+    const jitterMs = 120;
+    const targetDelay = minResponseDelayMs + Math.floor(Math.random() * jitterMs);
+
+    if (elapsed < targetDelay) {
+      await sleepWithTimer(targetDelay - elapsed, timersRef);
+    }
+
+    if (requestTokenRef.current !== token) return false;
+
+    const words = message.text.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) {
+      setConversations((prev) => [...prev, message]);
+      setExpandedSourceByMessage((prev) => ({ ...prev, [message.id]: null }));
+      return true;
+    }
+
+    setConversations((prev) => [
+      ...prev,
+      {
+        ...message,
+        text: '',
+        ...(message.meta ? { meta: 'Zeta · composing...' } : {}),
+      },
+    ]);
+    setExpandedSourceByMessage((prev) => ({ ...prev, [message.id]: null }));
+
+    const chunkSize = words.length > 110 ? 6 : words.length > 65 ? 5 : 4;
+    const frameDelayMs = 32;
+
+    for (let i = chunkSize; i <= words.length; i += chunkSize) {
+      await sleepWithTimer(frameDelayMs, timersRef);
+      if (requestTokenRef.current !== token) return false;
+      const nextText = words.slice(0, Math.min(i, words.length)).join(' ');
+      setConversations((prev) =>
+        prev.map((item) => (item.id === message.id ? { ...item, text: nextText } : item)),
+      );
+    }
+
+    if (requestTokenRef.current !== token) return false;
+
+    setConversations((prev) =>
+      prev.map((item) =>
+        item.id === message.id
+          ? {
+              ...item,
+              text: message.text,
+              ...(message.meta ? { meta: message.meta } : {}),
+            }
+          : item,
+      ),
+    );
+
+    return true;
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -548,10 +638,10 @@ const ChatPage: React.FC = () => {
       const candidateDetailed = extractSandyOnlyText(candidateDetailedRaw);
       const normalizedConcise = normalizeConciseOutput(data.sandy?.concise ?? data.answer, candidateDetailed);
       const sandyOnlyConcise = extractSandyOnlyText(normalizedConcise);
-      const primaryResponse = shouldUseDetailedAsPrimary(sandyOnlyConcise)
-        ? stripInlineSourceCitations(toReadableText(candidateDetailed))
-        : stripInlineSourceCitations(toReadableText(sandyOnlyConcise));
-      const overallResponseText = stripInlineSourceCitations(toReadableText(candidateDetailed ?? sandyOnlyConcise));
+      const primaryResponse = formatMainResponse(
+        sandyOnlyConcise || normalizeConciseOutput(candidateDetailed, candidateDetailed),
+      );
+      const overallResponseText = formatMainResponse(candidateDetailed ?? sandyOnlyConcise);
 
       const sources: SourceRef[] = (data.sources ?? []).slice(0, 3).map((s) => ({
         id: s.source_id,
@@ -565,7 +655,7 @@ const ChatPage: React.FC = () => {
       const assistantMessage: Message = {
         id: `q-a-${Date.now()}`,
         role: 'assistant',
-        text: isFallbackResponse ? continuityText.concise : (primaryResponse || data.error || continuityText.concise),
+        text: isFallbackResponse ? continuityText.concise : (overallResponseText || primaryResponse || data.error || continuityText.concise),
         meta: 'Zeta · just now',
         sources,
         davidDecisions: isFallbackResponse
@@ -577,19 +667,19 @@ const ChatPage: React.FC = () => {
           : (data.david?.decisions ?? []),
         queryContext: {
           detected: tagged.length > 0 ? tagged : ['all-connectors'],
-          confidence: isFallbackResponse
-            ? 62
-            : (sources.length ? Math.round((sources[0]?.label.includes('%') ? Number(sources[0].label.match(/(\d+)/)?.[1]) : 78)) : 78),
         },
       };
-      const detailedCandidate = isFallbackResponse ? continuityText.detailed : overallResponseText;
+      const detailedCandidate = isFallbackResponse
+        ? continuityText.detailed
+        : undefined;
       const normalizedPrimary = (primaryResponse ?? '').trim();
       const normalizedDetailed = (detailedCandidate ?? '').trim();
-      const hasAdditionalDetail =
-        normalizedDetailed.length > normalizedPrimary.length + 24 &&
-        normalizedDetailed !== normalizedPrimary;
-      if (hasAdditionalDetail) {
-        assistantMessage.detailedText = detailedCandidate;
+      if (
+        normalizedDetailed &&
+        normalizedDetailed !== normalizedPrimary &&
+        normalizedDetailed.length > normalizedPrimary.length + 30
+      ) {
+        assistantMessage.detailedText = normalizedDetailed;
       }
       const thinkingValue = isFallbackResponse
         ? 'Continuity mode active: returning deterministic response to keep chat experience stable during MVP validation.'
@@ -609,7 +699,7 @@ const ChatPage: React.FC = () => {
       if (sandyThinkingValue !== undefined) {
         assistantMessage.sandyThinking = sandyThinkingValue;
       }
-      const sandyConciseValue = isFallbackResponse ? continuityText.concise : stripInlineSourceCitations(toReadableText(sandyOnlyConcise));
+      const sandyConciseValue = isFallbackResponse ? continuityText.concise : formatMainResponse(sandyOnlyConcise);
       if (sandyConciseValue !== undefined) {
         assistantMessage.sandyConcise = sandyConciseValue;
       }
@@ -618,8 +708,8 @@ const ChatPage: React.FC = () => {
         assistantMessage.sandyDetailed = sandyDetailedValue;
       }
 
-      setConversations((prev) => [...prev, assistantMessage]);
-      setExpandedSourceByMessage((prev) => ({ ...prev, [assistantMessage.id]: null }));
+      const rendered = await revealAssistantMessage(assistantMessage, token, requestStartedAt);
+      if (!rendered) return;
       setActiveAgentTab('sandy');
 
       setAgentFlow((prev) => ({
@@ -650,34 +740,29 @@ const ChatPage: React.FC = () => {
 
       const errorMessageId = `q-a-${Date.now()}`;
 
-      setConversations((prev) => [
-        ...prev,
-        {
-          id: errorMessageId,
-          role: 'assistant',
-          text: buildClientContinuityText(text, err instanceof Error ? err.message : undefined).concise,
-          detailedText: buildClientContinuityText(text, err instanceof Error ? err.message : undefined).detailed,
-          thinking: 'Continuity mode active after transport/runtime failure.',
-          davidThinking: 'David could not complete retrieval due to a transport/runtime interruption.',
-          sandyThinking: 'Sandy presented a deterministic continuity response.',
-          sandyConcise: buildClientContinuityText(text, err instanceof Error ? err.message : undefined).concise,
-          sandyDetailed: buildClientContinuityText(text, err instanceof Error ? err.message : undefined).detailed,
-          davidDecisions: [
-            'Response path: client transport interruption',
-            'Return realistic generic message instead of raw error',
-            'Allow immediate retry with connector aliases',
-          ],
-          queryContext: {
-            detected: tagged.length > 0 ? tagged : ['all-connectors'],
-            confidence: 58,
-          },
-          meta: 'Zeta · error',
+      const continuity = buildClientContinuityText(text, err instanceof Error ? err.message : undefined);
+      const errorMessage: Message = {
+        id: errorMessageId,
+        role: 'assistant',
+        text: continuity.concise,
+        detailedText: continuity.detailed,
+        thinking: 'Continuity mode active after transport/runtime failure.',
+        davidThinking: 'David could not complete retrieval due to a transport/runtime interruption.',
+        sandyThinking: 'Sandy presented a deterministic continuity response.',
+        sandyConcise: continuity.concise,
+        sandyDetailed: continuity.detailed,
+        davidDecisions: [
+          'Response path: client transport interruption',
+          'Return realistic generic message instead of raw error',
+          'Allow immediate retry with connector aliases',
+        ],
+        queryContext: {
+          detected: tagged.length > 0 ? tagged : ['all-connectors'],
         },
-      ]);
-      setExpandedSourceByMessage((prev) => ({
-        ...prev,
-        [errorMessageId]: null,
-      }));
+        meta: 'Zeta · error',
+      };
+
+      await revealAssistantMessage(errorMessage, token, requestStartedAt);
 
       setAgentFlow((prev) => ({
         ...prev,
@@ -727,6 +812,224 @@ const ChatPage: React.FC = () => {
     () => [...conversations].reverse().find((m) => m.role === 'assistant' && m.id !== 'q-a-1'),
     [conversations],
   );
+
+  const openFilePicker = () => {
+    if (uploadingPdf) return;
+    fileInputRef.current?.click();
+  };
+
+  const buildContinuityVisual = () => {
+    const assistant = latestAssistant;
+    const decisions = (assistant?.davidDecisions ?? []).slice(0, 8).map((decision, index) => ({
+      decision: toReadableText(decision),
+      people: [],
+      topics: ['continuity'],
+      source: assistant?.sources?.[index]?.system?.toLowerCase() ?? 'mixed',
+      when: new Date().toISOString(),
+    }));
+    const distribution: Record<string, number> = {};
+    (assistant?.sources ?? []).forEach((s) => {
+      const key = s.system.toLowerCase();
+      distribution[key] = (distribution[key] ?? 0) + 1;
+    });
+
+    setVisualGraph({
+      counts: {
+        decisions: decisions.length,
+        people: 0,
+        topics: decisions.length ? 1 : 0,
+        sources: assistant?.sources?.length ?? 0,
+      },
+      decisions,
+      distribution,
+      error: 'Live graph fetch unavailable. Showing continuity snapshot from latest run.',
+      mode: 'continuity',
+    });
+  };
+
+  const postJsonWithProgress = (
+    url: string,
+    body: object,
+    onProgress: (percent: number) => void,
+  ) =>
+    new Promise<{ status: number; ok: boolean; body: unknown }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.withCredentials = true;
+      xhr.setRequestHeader('Content-Type', 'application/json');
+
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        const percent = Math.max(1, Math.min(99, Math.round((event.loaded / event.total) * 100)));
+        onProgress(percent);
+      };
+
+      xhr.onerror = () => reject(new Error('Upload request failed.'));
+      xhr.onload = () => {
+        let parsed: unknown = {};
+        try {
+          parsed = xhr.responseText ? JSON.parse(xhr.responseText) : {};
+        } catch {
+          parsed = { error: 'Invalid server response.' };
+        }
+        resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300, body: parsed });
+      };
+
+      xhr.send(JSON.stringify(body));
+    });
+
+  const loadVisualGraph = async () => {
+    setVisualLoading(true);
+    const maxAttempts = 2;
+    try {
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          const controller = new AbortController();
+          const timeout = window.setTimeout(() => controller.abort(), 4500);
+          const res = await fetch(`${authConfig.backendUrl}/api/stats`, {
+            method: 'GET',
+            credentials: 'include',
+            signal: controller.signal,
+          });
+          window.clearTimeout(timeout);
+
+          const data = await res.json() as {
+            counts?: { decisions: number; people: number; topics: number; sources: number };
+            decisions?: Array<{ decision: string; people: string[]; topics: string[]; source: string; when: string }>;
+            distribution?: Record<string, number>;
+            error?: string;
+          };
+
+          if (!res.ok) {
+            throw new Error(data.error ?? 'Failed to load graph data.');
+          }
+
+          setVisualGraph({
+            ...(data.counts ? { counts: data.counts } : {}),
+            decisions: data.decisions ?? [],
+            distribution: data.distribution ?? {},
+            mode: 'live',
+          });
+          return;
+        } catch (attemptErr) {
+          if (attempt < maxAttempts) {
+            await sleepWithTimer(300, timersRef);
+            continue;
+          }
+          throw attemptErr;
+        }
+      }
+    } catch {
+      buildContinuityVisual();
+    } finally {
+      setVisualLoading(false);
+    }
+  };
+
+  const handlePdfSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      const errorMessageId = `upload-error-${Date.now()}`;
+      setConversations((prev) => [
+        ...prev,
+        {
+          id: errorMessageId,
+          role: 'assistant',
+          text: 'Only PDF files are supported for upload.',
+          meta: 'Zeta · upload validation',
+        },
+      ]);
+      return;
+    }
+
+    setUploadingPdf(true);
+    setUploadProgress(1);
+    try {
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = String(reader.result ?? '');
+          const base64 = result.includes(',') ? result.split(',')[1] : result;
+          resolve(base64 ?? '');
+        };
+        reader.onerror = () => reject(new Error('Unable to read PDF file.'));
+        reader.readAsDataURL(file);
+      });
+
+      const uploadResult = await postJsonWithProgress(
+        `${authConfig.backendUrl}/api/upload/pdf`,
+        {
+          fileName: file.name,
+          mimeType: file.type,
+          dataBase64,
+        },
+        setUploadProgress,
+      );
+      setUploadProgress(100);
+
+      const data = uploadResult.body as {
+        ok?: boolean;
+        fileName?: string;
+        charCount?: number;
+        sourceId?: string;
+        warnings?: string[];
+        error?: string;
+      };
+
+      if (!uploadResult.ok || !data.ok) {
+        throw new Error(data.error ?? 'Upload failed.');
+      }
+
+      const msgId = `upload-ok-${Date.now()}`;
+      const uploadMessage: Message = {
+        id: msgId,
+        role: 'assistant',
+        text: `Uploaded ${data.fileName ?? file.name}. Parsed ${(data.charCount ?? 0).toLocaleString()} characters and indexed it for search.`,
+        meta: 'Zeta · upload complete',
+      };
+      if (data.sourceId) {
+        uploadMessage.sources = [{
+          id: data.sourceId,
+          system: 'Drive',
+          label: 'pdf upload',
+          excerpt: 'Indexed via chat upload pipeline.',
+        }];
+      }
+      setConversations((prev) => [...prev, uploadMessage]);
+      setFocusInspector('visualize');
+      void loadVisualGraph();
+      const warnings = data.warnings ?? [];
+      if (warnings.length > 0) {
+        const warningId = `upload-warning-${Date.now()}`;
+        setConversations((prev) => [
+          ...prev,
+          {
+            id: warningId,
+            role: 'assistant',
+            text: toReadableText(warnings.join('\n')),
+            meta: 'Zeta · upload note',
+          },
+        ]);
+      }
+    } catch (err) {
+      const msgId = `upload-failed-${Date.now()}`;
+      setConversations((prev) => [
+        ...prev,
+        {
+          id: msgId,
+          role: 'assistant',
+          text: err instanceof Error ? err.message : 'Upload failed.',
+          meta: 'Zeta · upload error',
+        },
+      ]);
+    } finally {
+      setUploadingPdf(false);
+      setUploadProgress(0);
+    }
+  };
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-vintage-white text-vintage-black">
@@ -784,6 +1087,16 @@ const ChatPage: React.FC = () => {
                       className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-100 transition"
                     >
                       Sandy view
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFocusInspector('visualize');
+                        void loadVisualGraph();
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs text-sky-700 hover:bg-sky-100 transition"
+                    >
+                      {visualLoading ? 'Visualizing...' : 'Visualize'}
                     </button>
                   </>
                 ) : null}
@@ -1001,6 +1314,16 @@ const ChatPage: React.FC = () => {
                     >
                       Sandy
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFocusInspector('visualize');
+                        void loadVisualGraph();
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${focusInspector === 'visualize' ? 'bg-sky-600 text-white' : 'text-vintage-gray-700 hover:bg-white'}`}
+                    >
+                      {visualLoading ? 'Visualizing...' : 'Visualize'}
+                    </button>
                   </div>
                   {focusInspector === 'sandy' ? (
                     <div className="inline-flex rounded-full border border-gray-200 p-1 bg-gray-50">
@@ -1055,7 +1378,7 @@ const ChatPage: React.FC = () => {
                         </ul>
                       </article>
                     </>
-                  ) : (
+                  ) : focusInspector === 'sandy' ? (
                     <>
                       <article className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
                         <p className="text-xs uppercase tracking-wide font-semibold text-emerald-700 flex items-center gap-1.5">
@@ -1074,6 +1397,86 @@ const ChatPage: React.FC = () => {
                             ? latestAssistant.sandyConcise ?? latestAssistant.text
                             : latestAssistant.sandyDetailed ?? latestAssistant.detailedText ?? latestAssistant.text}
                         </p>
+                      </article>
+                    </>
+                  ) : (
+                    <>
+                      <article className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+                        <p className="text-xs uppercase tracking-wide font-semibold text-sky-700 flex items-center gap-1.5">
+                          <GitBranch className="w-3.5 h-3.5" aria-hidden /> Graph snapshot
+                        </p>
+                        {visualLoading ? (
+                          <p className="mt-2 text-sm text-sky-700">Loading graph snapshot...</p>
+                        ) : visualGraph?.error ? (
+                          <p className="mt-2 text-sm text-amber-700">{visualGraph.error}</p>
+                        ) : (
+                          <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+                            <div className="rounded-lg border border-sky-200 bg-white px-3 py-2">
+                              <p className="text-[11px] text-vintage-gray-500">Decisions</p>
+                              <p className="text-base font-semibold text-vintage-black">{visualGraph?.counts?.decisions ?? 0}</p>
+                            </div>
+                            <div className="rounded-lg border border-sky-200 bg-white px-3 py-2">
+                              <p className="text-[11px] text-vintage-gray-500">People</p>
+                              <p className="text-base font-semibold text-vintage-black">{visualGraph?.counts?.people ?? 0}</p>
+                            </div>
+                            <div className="rounded-lg border border-sky-200 bg-white px-3 py-2">
+                              <p className="text-[11px] text-vintage-gray-500">Topics</p>
+                              <p className="text-base font-semibold text-vintage-black">{visualGraph?.counts?.topics ?? 0}</p>
+                            </div>
+                            <div className="rounded-lg border border-sky-200 bg-white px-3 py-2">
+                              <p className="text-[11px] text-vintage-gray-500">Sources</p>
+                              <p className="text-base font-semibold text-vintage-black">{visualGraph?.counts?.sources ?? 0}</p>
+                            </div>
+                          </div>
+                        )}
+                        {visualGraph?.mode ? (
+                          <p className="mt-2 text-[11px] text-vintage-gray-600">
+                            Mode: {visualGraph.mode === 'live' ? 'Live graph' : 'Continuity snapshot'}
+                          </p>
+                        ) : null}
+                      </article>
+
+                      <article className="rounded-xl border border-gray-200 bg-white p-4">
+                        <p className="text-xs uppercase tracking-wide font-semibold text-vintage-gray-700">Recent decision graph</p>
+                        {visualGraph?.decisions && visualGraph.decisions.length > 0 ? (
+                          <div className="mt-2 space-y-2">
+                            {visualGraph.decisions.slice(0, 6).map((item) => (
+                              <div key={`${item.decision}-${item.when}`} className="rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2">
+                                <p className="text-sm text-vintage-gray-900">{toReadableText(item.decision)}</p>
+                                <p className="mt-1 text-xs text-vintage-gray-600">
+                                  {item.people.join(', ') || 'Unknown owner'} · {item.source} · {item.topics.join(', ') || 'general'}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-sm text-vintage-gray-600">No decision graph nodes available yet.</p>
+                        )}
+                      </article>
+
+                      <article className="rounded-xl border border-gray-200 bg-white p-4">
+                        <p className="text-xs uppercase tracking-wide font-semibold text-vintage-gray-700">Source distribution</p>
+                        <div className="mt-3 space-y-2">
+                          {Object.entries(visualGraph?.distribution ?? {}).length === 0 ? (
+                            <p className="text-sm text-vintage-gray-600">No source distribution data yet.</p>
+                          ) : (
+                            Object.entries(visualGraph?.distribution ?? {}).map(([key, value]) => {
+                              const total = Object.values(visualGraph?.distribution ?? {}).reduce((sum, n) => sum + n, 0) || 1;
+                              const width = Math.max(8, Math.round((value / total) * 100));
+                              return (
+                                <div key={key}>
+                                  <div className="flex items-center justify-between text-xs text-vintage-gray-700">
+                                    <span className="uppercase tracking-wide">{key}</span>
+                                    <span>{value}</span>
+                                  </div>
+                                  <div className="mt-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                                    <div className="h-full rounded-full bg-gradient-to-r from-sky-400 to-indigo-500" style={{ width: `${width}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
                       </article>
                     </>
                   )}
@@ -1157,11 +1560,11 @@ const ChatPage: React.FC = () => {
                           : 'bg-indigo-50 border border-indigo-200 text-vintage-gray-900'
                       }`}
                     >
-                      <p className="whitespace-pre-wrap">{toReadableText(message.text)}</p>
+                      <p className="whitespace-pre-wrap">{formatMainResponse(message.text)}</p>
                       {message.detailedText && message.detailedText !== message.text ? (
                         <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-vintage-gray-600">Overall response</p>
-                          <p className="mt-1 text-xs text-vintage-gray-800 whitespace-pre-wrap">{stripInlineSourceCitations(toReadableText(message.detailedText))}</p>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-vintage-gray-600">Thinking</p>
+                          <p className="mt-1 text-xs text-vintage-gray-800 whitespace-pre-wrap">{formatMainResponse(message.detailedText)}</p>
                         </div>
                       ) : null}
                       {(message.sandyThinking ?? message.thinking) ? (
@@ -1222,11 +1625,6 @@ const ChatPage: React.FC = () => {
                               {tag.replace('-', ' ')}
                             </span>
                           ))}
-                          {message.queryContext.confidence ? (
-                            <span className="rounded-full border border-gray-200 bg-gray-50 text-vintage-gray-700 px-2 py-0.5 text-[10px] uppercase tracking-wide">
-                              confidence {message.queryContext.confidence}%
-                            </span>
-                          ) : null}
                         </div>
                       ) : null}
                     </div>
@@ -1246,10 +1644,11 @@ const ChatPage: React.FC = () => {
                     <Bot className="w-4 h-4" aria-hidden />
                   </span>
                   <div className="rounded-2xl px-4 py-3 text-sm border border-gray-200 bg-white text-vintage-gray-600 shadow-sm">
-                    <span className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-vintage-gray-400 animate-pulse" />
                       <span className="w-1.5 h-1.5 rounded-full bg-vintage-gray-400 animate-pulse [animation-delay:120ms]" />
                       <span className="w-1.5 h-1.5 rounded-full bg-vintage-gray-400 animate-pulse [animation-delay:240ms]" />
+                      <span className="text-xs text-vintage-gray-500">Thinking...</span>
                     </span>
                   </div>
                 </article>
@@ -1257,15 +1656,32 @@ const ChatPage: React.FC = () => {
                 </div>
 
                 <div className="border-t border-gray-200 bg-white px-4 sm:px-6 py-4 mb-2.5">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    onChange={(event) => void handlePdfSelected(event)}
+                    className="hidden"
+                  />
                   <form className="flex items-center gap-2 sm:gap-3" onSubmit={(e) => void handleSubmit(e)}>
                 <button
                   type="button"
+                  onClick={openFilePicker}
                   className="h-10 w-10 rounded-full border border-gray-200 text-vintage-gray-700 hover:bg-gray-50 inline-flex items-center justify-center disabled:opacity-60"
                   aria-label="Attach"
-                  disabled
+                  disabled={uploadingPdf || responding}
                 >
                   <Paperclip className="w-4 h-4" aria-hidden />
                 </button>
+
+                {uploadingPdf ? (
+                  <div className="w-28 shrink-0">
+                    <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-gradient-to-r from-sky-400 to-indigo-500 transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+                    </div>
+                    <p className="mt-1 text-[10px] text-vintage-gray-500 text-center">Uploading {uploadProgress}%</p>
+                  </div>
+                ) : null}
 
                 <div className="relative flex-1">
                   <input
@@ -1304,7 +1720,7 @@ const ChatPage: React.FC = () => {
                   disabled={!draft.trim() || responding}
                 >
                   <SendHorizontal className="w-4 h-4" aria-hidden />
-                  {responding ? 'Working...' : 'Send'}
+                  {uploadingPdf ? 'Uploading...' : responding ? 'Working...' : 'Send'}
                 </button>
                   </form>
                 </div>
