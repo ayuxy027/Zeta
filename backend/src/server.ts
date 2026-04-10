@@ -6,6 +6,7 @@ import slackRouter from "./routers/slack.router.js";
 import { initDb } from "./db/pool.js";
 import { createDriveIngestRouter } from "./routes/driveIngest.js";
 import { prisma } from "./lib/prisma.js";
+import { startSlackWorker } from "./workers/slack.worker.js";
 
 const port = Number(process.env.PORT ?? 3001);
 const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
@@ -249,6 +250,7 @@ async function start() {
   await initDb();
   app.listen(port, () => {
     console.log(`Zeta backend listening on http://localhost:${port}`);
+    startSlackWorker();
   });
 }
 
