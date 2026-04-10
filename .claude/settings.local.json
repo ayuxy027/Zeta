@@ -32,7 +32,8 @@
       "Bash(node -e \"console.log\\(require\\('@google/generative-ai/package.json'\\).version\\)\")",
       "Bash(python3 -c ':*)",
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\);r.results.forEach\\(\\(res,i\\)=>{console.log\\('Result',i,':',JSON.stringify\\(res.data.slice\\(0,5\\)\\)}\\)}\\)}\")",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(npm ci:*)"
     ]
   }
 }
