@@ -8,5 +8,5 @@ RUN npm ci
 COPY . .
 RUN npm run build && npm prune --omit=dev
 
-EXPOSE 3000
+EXPOSE 3001
 CMD ["node", "dist/server.js"]

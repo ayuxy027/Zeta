@@ -1,3 +1,5 @@
+name: zeta
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -19,12 +21,13 @@ services:
   api:
     build: ./backend
     ports:
-      - '3000:3000'
+      - '3001:3001'
     env_file:
       - ./backend/.env
     environment:
       REDIS_URL: redis://redis:6379
-      PORT: '3000'
+      PORT: '3001'
+      AUTH0_BASE_URL: http://localhost:3001
     depends_on:
       postgres:
         condition: service_healthy
