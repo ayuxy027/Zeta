@@ -7,6 +7,7 @@ import AboutPage from "./pages/AboutPage";
 import ChangelogPage from "./pages/ChangelogPage";
 import BlogPage from "./pages/BlogPage";
 import DashboardPage from "./pages/DashboardPage";
+import ChatPage from "./pages/ChatPage";
 import ConnectorsPage from "./pages/ConnectorsPage";
 import LoginPage from "./pages/LoginPage";
 import RequireAuth from "./auth/RequireAuth";
@@ -38,6 +39,14 @@ const App: React.FC = () => {
           element={
             <RequireAuth>
               <DashboardPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/dashboard/chat"
+          element={
+            <RequireAuth>
+              <ChatPage />
             </RequireAuth>
           }
         />
