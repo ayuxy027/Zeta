@@ -20,6 +20,9 @@ model User {
   slackMessages          SlackMessage[]
   gmailMessages          GmailMessage[]
   driveExtractions       DriveExtraction[]
+  recallSettings         RecallBotSettings?
+  calendarConnections    CalendarConnection[]
+  meetings               Meeting[]
 }
 
 model IntegrationCredential {
@@ -108,4 +111,116 @@ model DriveExtraction {
 
   @@index([userId])
   @@map("drive_extractions")
+}
+
+model IngestedDocument {
+  id         String   @id @default(cuid())
+  sourceId   String   @unique // e.g. slack_arch_001, gmail_vendor_001
+  sourceType String   // slack | gmail | drive | meeting
+  rawText    String
+  author     String?
+  subject    String?
+  channel    String?
+  timestamp  String?
+  isRelevant Boolean  @default(false)
+  decisions  Json     @default("[]")
+  people     Json     @default("[]")
+  topics     Json     @default("[]")
+  createdAt  DateTime @default(now())
+
+  @@index([sourceType])
+  @@map("ingested_documents")
+}
+
+// ── Recall Bot ──────────────────────────────────────────────────────────────
+
+model RecallBotSettings {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isEnabled    Boolean   @default(false)
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("recall_bot_settings")
+}
+
+model CalendarConnection {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calendarId      String   @unique
+  calendarEmail   String
+  refreshTokenEnc String
+  platform        String   @default("google")
+  recallCalendarId String?
+  isActive        Boolean  @default(true)
+  connectedAt     DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  meetings        Meeting[]
+
+  @@index([userId])
+  @@map("calendar_connections")
+}
+
+model Meeting {
+  id               String   @id @default(cuid())
+  eventId          String
+  calendarId       String
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calendar         CalendarConnection @relation(fields: [calendarId], references: [calendarId], onDelete: Cascade)
+  title            String?
+  meetingUrl       String?
+  platform         String?
+  startTimeUtc     DateTime
+  endTimeUtc       DateTime
+  botId            String?
+  botStatus        String?
+  botStatusSubCode String?
+  isDeleted        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  attendees        MeetingAttendee[]
+  transcripts      Transcript[]
+
+  @@unique([eventId, calendarId])
+  @@index([userId])
+  @@index([startTimeUtc])
+  @@index([botId])
+  @@map("meetings")
+}
+
+model MeetingAttendee {
+  id             String  @id @default(cuid())
+  meetingId      String
+  meeting        Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  attendeeEmail  String
+  isOrganizer    Boolean @default(false)
+  responseStatus String?
+  createdAt      DateTime @default(now())
+
+  @@unique([meetingId, attendeeEmail])
+  @@index([meetingId])
+  @@map("meeting_attendees")
+}
+
+model Transcript {
+  id                  String   @id @default(cuid())
+  meetingId           String
+  meeting             Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  botId               String
+  speaker             String?
+  speakerId           String?
+  transcriptText      String
+  startTranscriptTime DateTime
+  endTranscriptTime   DateTime
+  createdAt           DateTime @default(now())
+
+  @@index([meetingId])
+  @@index([botId])
+  @@index([createdAt])
+  @@map("transcripts")
 }

@@ -3,6 +3,7 @@ import neo4j from "neo4j-driver";
 import { answerQuestion } from "../services/query.service.js";
 import { runPipeline } from "../pipeline/pipeline.js";
 import type { PipelinePayload } from "../pipeline/types.js";
+import { prisma } from "../lib/prisma.js";
 
 export function createQueryRouter() {
   const router = express.Router();
@@ -49,6 +50,36 @@ export function createQueryRouter() {
 
     try {
       const result = await runPipeline(payload);
+
+      // Persist raw data + extraction results to PostgreSQL
+      try {
+        await prisma.ingestedDocument.upsert({
+          where: { sourceId: payload.source_id },
+          update: {
+            rawText: payload.raw_text,
+            isRelevant: result.entities?.is_relevant ?? false,
+            decisions: result.entities?.decisions ?? [],
+            people: result.entities?.people ?? [],
+            topics: result.entities?.topics ?? [],
+          },
+          create: {
+            sourceId: payload.source_id,
+            sourceType: payload.source_type,
+            rawText: payload.raw_text,
+            author: payload.metadata.author ?? null,
+            subject: payload.metadata.subject ?? null,
+            channel: payload.metadata.channel ?? null,
+            timestamp: payload.metadata.timestamp,
+            isRelevant: result.entities?.is_relevant ?? false,
+            decisions: result.entities?.decisions ?? [],
+            people: result.entities?.people ?? [],
+            topics: result.entities?.topics ?? [],
+          },
+        });
+      } catch (dbErr) {
+        console.warn("[ingest] Postgres persist failed:", (dbErr as Error).message);
+      }
+
       res.json({ ok: true, ...result });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Ingest failed";

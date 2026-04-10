@@ -10,6 +10,8 @@ import { createGmailRouter } from "./routes/gmail.js";
 import { createIntegrationsRouter } from "./routers/integrations.router.js";
 import { prisma } from "./lib/prisma.js";
 import { createQueryRouter } from "./routes/query.js";
+import { createRecallRouter } from "./routers/recall.router.js";
+import recallWebhooksRouter from "./routers/recallWebhooks.router.js";
 import { startSlackWorker } from "./workers/slack.worker.js";
 
 const port = Number(process.env.PORT ?? 3001);
@@ -145,6 +147,7 @@ app.use(
 
 // Slack webhook endpoint (no auth required - must be before auth middleware)
 app.use("/slack", slackRouter);
+app.use("/webhooks/recall", recallWebhooksRouter);
 
 app.use(
   auth({
@@ -258,6 +261,7 @@ app.use("/api", createDriveIngestRouter());
 app.use("/api", createGmailRouter());
 app.use("/api/integrations", createIntegrationsRouter());
 app.use("/api", createQueryRouter());
+app.use("/api/recall", createRecallRouter());
 
 async function start() {
   await initDb();
