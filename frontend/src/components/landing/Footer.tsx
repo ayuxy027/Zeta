@@ -9,14 +9,14 @@ const Footer: React.FC = () => {
 
     const footerLinks = {
         product: [
-            { label: 'Features', path: '/about' },
-            { label: 'Pricing', path: '/pricing' },
+            { label: 'Dashboard', path: '/dashboard' },
+            { label: 'Chat', path: '/dashboard/chat' },
             { label: 'Changelog', path: '/changelog' },
         ],
         company: [
-            { label: 'About', path: '/about' },
-            { label: 'Blog', path: '/blog' },
-            { label: 'Contact', path: '/about' },
+            { label: 'Connectors', path: '/connectors' },
+            { label: 'Login', path: '/login' },
+            { label: 'Home', path: '/' },
         ],
         legal: [
             { label: 'Privacy', path: '#' },
@@ -115,4 +115,3 @@ const Footer: React.FC = () => {
 };
 
 export default Footer;
-
