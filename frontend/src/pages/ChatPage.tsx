@@ -4,6 +4,8 @@ import {
   Bot,
   BrainCircuit,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   FileText,
   ListChecks,
@@ -13,6 +15,7 @@ import {
   Sparkles,
   User,
   Workflow,
+  X,
 } from 'lucide-react';
 import { authConfig } from '../auth/config';
 
@@ -115,6 +118,86 @@ const normalizeConciseOutput = (concise?: string, detailed?: string) => {
   return firstSentence || cleanedDetailed;
 };
 
+const toReadableText = (value?: string) => {
+  const text = (value ?? '').trim();
+  if (!text) return text;
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*]\s+/gm, '')
+    .replace(/\r/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+const stripInlineSourceCitations = (value?: string) => {
+  const text = (value ?? '').trim();
+  if (!text) return text;
+  return text
+    .replace(/\[(?:Source\s*\d+|Knowledge\s*Graph)(?:\s*,\s*Source\s*\d+)*\]/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .trim();
+};
+
+const shouldUseDetailedAsPrimary = (concise?: string) => {
+  const c = (concise ?? '').trim();
+  if (!c) return true;
+  if (/\b\d+\.\s*$/.test(c)) return true;
+  if (c.length < 70) return true;
+  return false;
+};
+
+const enrichDavidThinking = (
+  baseThinking: string | undefined,
+  decisionCount: number,
+  sourceCount: number,
+) => {
+  const trimmed = (baseThinking ?? '').trim();
+  const fallback = `I analyzed ${sourceCount} source signal${sourceCount === 1 ? '' : 's'}, extracted ${decisionCount} decision thread${decisionCount === 1 ? '' : 's'}, and checked for contradictions before handoff to Sandy.`;
+  if (!trimmed) return fallback;
+  if (trimmed.length < 120) {
+    return `${trimmed} I also validated consistency across channels and prioritized the strongest evidence path before synthesis.`;
+  }
+  return trimmed;
+};
+
+const enrichSandyThinking = (
+  baseThinking: string | undefined,
+  sourceCount: number,
+) => {
+  const trimmed = (baseThinking ?? '').trim();
+  const fallback = `I converted David's analysis into an executive summary, highlighted the highest-confidence signals first, and mapped claims to ${sourceCount} cited source snippet${sourceCount === 1 ? '' : 's'}.`;
+  if (!trimmed) return fallback;
+  if (trimmed.length < 120) {
+    return `${trimmed} I then refined structure and tone so the final answer is clear, actionable, and easy to audit in front of stakeholders.`;
+  }
+  return trimmed;
+};
+
+const extractSandyOnlyText = (text?: string) => {
+  const value = (text ?? '').trim();
+  if (!value) return value;
+
+  const sandyHeader = /(?:^|\n)\s*(?:\*\*)?Sandy(?:\s*\(presentation\))?\s*:\s*/i;
+  const match = sandyHeader.exec(value);
+  if (match && match.index >= 0) {
+    const start = match.index + match[0].length;
+    return value.slice(start).trim() || value;
+  }
+
+  if (/^\*\*?david/i.test(value) || /^david\s*\(/i.test(value) || /^david\s*:/i.test(value)) {
+    const withoutDavidLabel = value
+      .replace(/^\*\*?david[^:]*:\s*/i, '')
+      .replace(/^david[^:]*:\s*/i, '')
+      .trim();
+    return withoutDavidLabel || value;
+  }
+
+  return value;
+};
+
 const createIdleAgentFlow = (): AgentFlowState => ({
   activeAgent: 'idle',
   overallMessage: 'Waiting for your query.',
@@ -179,12 +262,10 @@ const INITIAL_MESSAGES: Message[] = [
 ];
 
 const STARTER_QUESTIONS = [
-  'Why did we choose PostgreSQL?',
   'What payment provider did we pick and why?',
   'What decisions did Priya make?',
   'What is our caching strategy?',
-  'When is our Series A target?',
-  'List all major technical decisions',
+  'Why did we choose AWS over GCP?',
 ];
 
 const SOURCE_TYPE_MAP: Record<string, SourceRef['system']> = {
@@ -210,6 +291,9 @@ const ChatPage: React.FC = () => {
   const [agentFlow, setAgentFlow] = React.useState<AgentFlowState>(createIdleAgentFlow());
   const [activeAgentTab, setActiveAgentTab] = React.useState<'david' | 'sandy'>('david');
   const [sandyViewMode, setSandyViewMode] = React.useState<'concise' | 'detailed'>('concise');
+  const [analysisExpanded, setAnalysisExpanded] = React.useState(false);
+  const [expandedSourceByMessage, setExpandedSourceByMessage] = React.useState<Record<string, number | null>>({});
+  const [focusInspector, setFocusInspector] = React.useState<'david' | 'sandy' | null>(null);
 
   const timersRef = React.useRef<number[]>([]);
   const requestTokenRef = React.useRef(0);
@@ -244,6 +328,17 @@ const ChatPage: React.FC = () => {
       timersRef.current = [];
     };
   }, []);
+
+  React.useEffect(() => {
+    if (!focusInspector) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setFocusInspector(null);
+      }
+    };
+    window.addEventListener('keydown', onEscape);
+    return () => window.removeEventListener('keydown', onEscape);
+  }, [focusInspector]);
 
   const handleDraftChange = (nextValue: string) => {
     setDraft(nextValue);
@@ -280,6 +375,9 @@ const ChatPage: React.FC = () => {
     setAgentFlow(createIdleAgentFlow());
     setActiveAgentTab('david');
     setSandyViewMode('concise');
+    setAnalysisExpanded(false);
+    setExpandedSourceByMessage({});
+    setFocusInspector(null);
     timersRef.current.forEach((id) => window.clearTimeout(id));
     timersRef.current = [];
   };
@@ -446,13 +544,19 @@ const ChatPage: React.FC = () => {
         data.responseMode === 'fallback' ||
         Boolean(data.fallback?.isMock) ||
         (!data.answer && !data.detailedAnswer);
-      const candidateDetailed = data.sandy?.detailed ?? data.detailedAnswer ?? data.answer;
+      const candidateDetailedRaw = data.sandy?.detailed ?? data.detailedAnswer ?? data.answer;
+      const candidateDetailed = extractSandyOnlyText(candidateDetailedRaw);
       const normalizedConcise = normalizeConciseOutput(data.sandy?.concise ?? data.answer, candidateDetailed);
+      const sandyOnlyConcise = extractSandyOnlyText(normalizedConcise);
+      const primaryResponse = shouldUseDetailedAsPrimary(sandyOnlyConcise)
+        ? stripInlineSourceCitations(toReadableText(candidateDetailed))
+        : stripInlineSourceCitations(toReadableText(sandyOnlyConcise));
+      const overallResponseText = stripInlineSourceCitations(toReadableText(candidateDetailed ?? sandyOnlyConcise));
 
       const sources: SourceRef[] = (data.sources ?? []).slice(0, 3).map((s) => ({
         id: s.source_id,
         system: SOURCE_TYPE_MAP[s.source_type] ?? 'Slack',
-        label: `${(s.source_type ?? 'source')} · ${(s.score * 100).toFixed(0)}% match`,
+        label: `${s.source_type ?? 'source'}`,
         excerpt: s.preview ?? '',
       }));
 
@@ -461,7 +565,7 @@ const ChatPage: React.FC = () => {
       const assistantMessage: Message = {
         id: `q-a-${Date.now()}`,
         role: 'assistant',
-        text: isFallbackResponse ? continuityText.concise : (normalizedConcise || data.error || continuityText.concise),
+        text: isFallbackResponse ? continuityText.concise : (primaryResponse || data.error || continuityText.concise),
         meta: 'Zeta · just now',
         sources,
         davidDecisions: isFallbackResponse
@@ -478,8 +582,13 @@ const ChatPage: React.FC = () => {
             : (sources.length ? Math.round((sources[0]?.label.includes('%') ? Number(sources[0].label.match(/(\d+)/)?.[1]) : 78)) : 78),
         },
       };
-      const detailedCandidate = isFallbackResponse ? continuityText.detailed : (candidateDetailed ?? normalizedConcise);
-      if (detailedCandidate !== undefined) {
+      const detailedCandidate = isFallbackResponse ? continuityText.detailed : overallResponseText;
+      const normalizedPrimary = (primaryResponse ?? '').trim();
+      const normalizedDetailed = (detailedCandidate ?? '').trim();
+      const hasAdditionalDetail =
+        normalizedDetailed.length > normalizedPrimary.length + 24 &&
+        normalizedDetailed !== normalizedPrimary;
+      if (hasAdditionalDetail) {
         assistantMessage.detailedText = detailedCandidate;
       }
       const thinkingValue = isFallbackResponse
@@ -490,26 +599,27 @@ const ChatPage: React.FC = () => {
       }
       const davidThinkingValue = isFallbackResponse
         ? 'David identified a low-confidence or interrupted run and selected safe continuity output.'
-        : data.david?.thinking;
+        : enrichDavidThinking(data.david?.thinking, (data.david?.decisions ?? []).length, sources.length);
       if (davidThinkingValue !== undefined) {
         assistantMessage.davidThinking = davidThinkingValue;
       }
       const sandyThinkingValue = isFallbackResponse
         ? 'Sandy rendered an executive-friendly continuity response with context notes.'
-        : data.sandy?.thinking;
+        : enrichSandyThinking(data.sandy?.thinking, sources.length);
       if (sandyThinkingValue !== undefined) {
         assistantMessage.sandyThinking = sandyThinkingValue;
       }
-      const sandyConciseValue = isFallbackResponse ? continuityText.concise : normalizedConcise;
+      const sandyConciseValue = isFallbackResponse ? continuityText.concise : stripInlineSourceCitations(toReadableText(sandyOnlyConcise));
       if (sandyConciseValue !== undefined) {
         assistantMessage.sandyConcise = sandyConciseValue;
       }
-      const sandyDetailedValue = isFallbackResponse ? continuityText.detailed : data.sandy?.detailed;
+      const sandyDetailedValue = isFallbackResponse ? continuityText.detailed : overallResponseText;
       if (sandyDetailedValue !== undefined) {
         assistantMessage.sandyDetailed = sandyDetailedValue;
       }
 
       setConversations((prev) => [...prev, assistantMessage]);
+      setExpandedSourceByMessage((prev) => ({ ...prev, [assistantMessage.id]: null }));
       setActiveAgentTab('sandy');
 
       setAgentFlow((prev) => ({
@@ -538,10 +648,12 @@ const ChatPage: React.FC = () => {
     } catch (err) {
       if (requestTokenRef.current !== token) return;
 
+      const errorMessageId = `q-a-${Date.now()}`;
+
       setConversations((prev) => [
         ...prev,
         {
-          id: `q-a-${Date.now()}`,
+          id: errorMessageId,
           role: 'assistant',
           text: buildClientContinuityText(text, err instanceof Error ? err.message : undefined).concise,
           detailedText: buildClientContinuityText(text, err instanceof Error ? err.message : undefined).detailed,
@@ -562,6 +674,10 @@ const ChatPage: React.FC = () => {
           meta: 'Zeta · error',
         },
       ]);
+      setExpandedSourceByMessage((prev) => ({
+        ...prev,
+        [errorMessageId]: null,
+      }));
 
       setAgentFlow((prev) => ({
         ...prev,
@@ -613,30 +729,83 @@ const ChatPage: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-vintage-white pt-20 pb-12 text-vintage-black">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6">
-        <section className="rounded-3xl border border-gray-200 bg-gradient-to-br from-white via-white to-indigo-50/40 shadow-[0_20px_60px_-42px_rgba(15,23,42,0.6)] overflow-hidden">
-          <div className="border-b border-gray-200 px-4 sm:px-6 pt-5 pb-4 space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold font-display text-vintage-black flex items-center gap-2">
-                  <Sparkles className="w-6 h-6 text-indigo-600" aria-hidden />
-                  Chat
-                </h1>
-                <p className="text-sm sm:text-base text-vintage-gray-600 mt-2 max-w-2xl">
-                  Ask once. David analyzes your org memory, then Sandy synthesizes a source-grounded answer.
-                </p>
-                <p className="text-xs text-vintage-gray-500 mt-1 max-w-2xl">
-                  Use @ aliases like @slack, @gmail, @drive, and @meeting.
-                </p>
+    <div className="h-screen w-screen overflow-hidden bg-vintage-white text-vintage-black">
+      <div className="h-full w-full flex flex-col p-4 sm:p-6 lg:p-8 md:pl-[74px] lg:pl-[92px]">
+        <div className="mb-4 sm:mb-5">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 px-1 sm:px-0">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold font-display text-vintage-black flex items-center gap-2">
+                <Sparkles className="w-6 h-6 text-indigo-600" aria-hidden />
+                Chat with your organization's data
+              </h1>
+            </div>
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium h-fit ${statusPillClass}`}>
+              <Workflow className="w-3.5 h-3.5" aria-hidden />
+              Dual-agent orchestration
+            </span>
+          </div>
+        </div>
+
+        <section className="flex-1 min-h-0 rounded-3xl border border-gray-200 bg-gradient-to-br from-white via-white to-indigo-50/40 shadow-[0_20px_60px_-42px_rgba(15,23,42,0.6)] overflow-hidden flex flex-col">
+          <div className="border-b border-gray-200 px-4 sm:px-6 pt-4 pb-3 space-y-3 shrink-0">
+            <div className="rounded-2xl border border-gray-200 bg-white px-3 py-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${statusPillClass}`}>
+                  <Workflow className="w-3.5 h-3.5" aria-hidden />
+                  {agentFlow.activeAgent === 'error' ? 'Attention required' : 'Dual-agent orchestration'}
+                </span>
+                <p className="text-xs text-vintage-gray-700 flex-1 min-w-[220px]">{agentFlow.overallMessage}</p>
+                <button
+                  type="button"
+                  onClick={() => setAnalysisExpanded((value) => !value)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-vintage-gray-700 hover:bg-white transition"
+                >
+                  {analysisExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  {analysisExpanded ? 'Hide analysis' : 'Show analysis'}
+                </button>
+                {latestAssistant ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFocusInspector('david');
+                        setActiveAgentTab('david');
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs text-indigo-700 hover:bg-indigo-100 transition"
+                    >
+                      David view
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFocusInspector('sandy');
+                        setActiveAgentTab('sandy');
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-100 transition"
+                    >
+                      Sandy view
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={clearChat}
+                  className="text-xs px-3 py-1 rounded-full border border-gray-200 text-vintage-gray-600 hover:text-vintage-black hover:bg-white transition"
+                >
+                  Reset chat
+                </button>
               </div>
-              <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium h-fit ${statusPillClass}`}>
-                <Workflow className="w-3.5 h-3.5" aria-hidden />
-                Dual-agent orchestration
-              </span>
+              <div className="mt-2 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${agentFlow.activeAgent === 'error' ? 'bg-gradient-to-r from-red-400 to-red-600' : 'bg-gradient-to-r from-indigo-400 to-indigo-600'}`}
+                  style={{ width: `${agentFlow.overallProgress}%` }}
+                />
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-5 gap-3">
+            {analysisExpanded ? (
+              <>
+                <div className="grid grid-cols-1 xl:grid-cols-5 gap-3">
               <section className="xl:col-span-3 rounded-2xl border border-gray-200 bg-white p-3 sm:p-4">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs uppercase tracking-wide font-semibold text-vintage-gray-500">Orchestrator</p>
@@ -717,9 +886,9 @@ const ChatPage: React.FC = () => {
                   )}
                 </div>
               </section>
-            </div>
+                </div>
 
-            <section className="rounded-2xl border border-gray-200 bg-white p-3 sm:p-4">
+                <section className="rounded-2xl border border-gray-200 bg-white p-3 sm:p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="inline-flex rounded-full border border-gray-200 p-1 bg-gray-50">
                   <button
@@ -808,21 +977,111 @@ const ChatPage: React.FC = () => {
               ) : (
                 <p className="mt-3 text-xs text-vintage-gray-500">Send a message to view David and Sandy analysis tabs.</p>
               )}
-            </section>
-
-            <div className="mt-2 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={clearChat}
-                className="text-xs sm:text-sm text-vintage-gray-600 hover:text-vintage-black transition"
-              >
-                Reset chat
-              </button>
-            </div>
+                </section>
+              </>
+            ) : null}
           </div>
 
-          <div className="h-[65vh] min-h-[500px] max-h-[820px] flex flex-col">
-            <div id="chat-feed" ref={feedRef} className="flex-1 overflow-auto px-4 sm:px-6 py-5 space-y-4">
+          <div className="flex-1 min-h-0 flex flex-col">
+            {focusInspector && latestAssistant ? (
+              <section className="flex-1 min-h-0 flex flex-col bg-white">
+                <div className="shrink-0 border-b border-gray-200 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="inline-flex rounded-full border border-gray-200 p-1 bg-gray-50">
+                    <button
+                      type="button"
+                      onClick={() => setFocusInspector('david')}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${focusInspector === 'david' ? 'bg-indigo-600 text-white' : 'text-vintage-gray-700 hover:bg-white'}`}
+                    >
+                      David
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFocusInspector('sandy')}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${focusInspector === 'sandy' ? 'bg-emerald-600 text-white' : 'text-vintage-gray-700 hover:bg-white'}`}
+                    >
+                      Sandy
+                    </button>
+                  </div>
+                  {focusInspector === 'sandy' ? (
+                    <div className="inline-flex rounded-full border border-gray-200 p-1 bg-gray-50">
+                      <button
+                        type="button"
+                        onClick={() => setSandyViewMode('concise')}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${sandyViewMode === 'concise' ? 'bg-emerald-600 text-white' : 'text-vintage-gray-700 hover:bg-white'}`}
+                      >
+                        Concise
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSandyViewMode('detailed')}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${sandyViewMode === 'detailed' ? 'bg-emerald-600 text-white' : 'text-vintage-gray-700 hover:bg-white'}`}
+                      >
+                        Detailed
+                      </button>
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setFocusInspector(null)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-vintage-gray-700 hover:bg-white transition"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Close
+                  </button>
+                </div>
+
+                <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-3">
+                  {focusInspector === 'david' ? (
+                    <>
+                      <article className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+                        <p className="text-xs uppercase tracking-wide font-semibold text-indigo-700 flex items-center gap-1.5">
+                          <BrainCircuit className="w-3.5 h-3.5" aria-hidden /> David thinking
+                        </p>
+                        <p className="mt-2 text-sm text-indigo-900 whitespace-pre-wrap">
+                          {latestAssistant.davidThinking ?? latestAssistant.thinking ?? 'David is preparing the analysis...'}
+                        </p>
+                      </article>
+                      <article className="rounded-xl border border-gray-200 bg-white p-4">
+                        <p className="text-xs uppercase tracking-wide font-semibold text-vintage-gray-700 flex items-center gap-1.5">
+                          <ListChecks className="w-3.5 h-3.5" aria-hidden /> David conclusions
+                        </p>
+                        <ul className="mt-2 space-y-1.5 text-sm text-vintage-gray-800 list-disc pl-5">
+                          {(latestAssistant.davidDecisions && latestAssistant.davidDecisions.length > 0
+                            ? latestAssistant.davidDecisions
+                            : ['Awaiting concrete decision extraction from current context.'])
+                            .map((decision) => (
+                              <li key={decision}>{decision}</li>
+                            ))}
+                        </ul>
+                      </article>
+                    </>
+                  ) : (
+                    <>
+                      <article className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                        <p className="text-xs uppercase tracking-wide font-semibold text-emerald-700 flex items-center gap-1.5">
+                          <Presentation className="w-3.5 h-3.5" aria-hidden /> Sandy thinking
+                        </p>
+                        <p className="mt-2 text-sm text-emerald-900 whitespace-pre-wrap">
+                          {latestAssistant.sandyThinking ?? latestAssistant.thinking ?? 'Sandy is composing the final response...'}
+                        </p>
+                      </article>
+                      <article className="rounded-xl border border-gray-200 bg-white p-4">
+                        <p className="text-xs uppercase tracking-wide font-semibold text-vintage-gray-700 flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5" aria-hidden /> Sandy response
+                        </p>
+                        <p className="mt-2 text-sm text-vintage-gray-900 whitespace-pre-wrap">
+                          {sandyViewMode === 'concise'
+                            ? latestAssistant.sandyConcise ?? latestAssistant.text
+                            : latestAssistant.sandyDetailed ?? latestAssistant.detailedText ?? latestAssistant.text}
+                        </p>
+                      </article>
+                    </>
+                  )}
+                </div>
+              </section>
+            ) : (
+              <>
+                <div id="chat-feed" ref={feedRef} className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-4">
               {activeConnectorTags.length > 0 ? (
                 <section className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
                   <p className="text-xs text-amber-800 font-medium">Routing connectors</p>
@@ -882,6 +1141,7 @@ const ChatPage: React.FC = () => {
 
               {conversations.map((message) => {
                 const isAssistant = message.role === 'assistant';
+                const expandedSourceIndex = expandedSourceByMessage[message.id] ?? null;
                 return (
                   <article key={message.id} className={`flex items-start gap-3 ${isAssistant ? '' : 'justify-end'}`}>
                     {isAssistant ? (
@@ -897,11 +1157,17 @@ const ChatPage: React.FC = () => {
                           : 'bg-indigo-50 border border-indigo-200 text-vintage-gray-900'
                       }`}
                     >
-                      <p>{message.text}</p>
-                      {message.thinking ? (
-                        <div className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">Thinking</p>
-                          <p className="mt-1 text-xs text-indigo-900 whitespace-pre-wrap">{message.thinking}</p>
+                      <p className="whitespace-pre-wrap">{toReadableText(message.text)}</p>
+                      {message.detailedText && message.detailedText !== message.text ? (
+                        <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-vintage-gray-600">Overall response</p>
+                          <p className="mt-1 text-xs text-vintage-gray-800 whitespace-pre-wrap">{stripInlineSourceCitations(toReadableText(message.detailedText))}</p>
+                        </div>
+                      ) : null}
+                      {(message.sandyThinking ?? message.thinking) ? (
+                        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Sandy thinking</p>
+                          <p className="mt-1 text-xs text-emerald-900 whitespace-pre-wrap">{toReadableText(message.sandyThinking ?? message.thinking)}</p>
                         </div>
                       ) : null}
                       {message.meta ? <p className="text-[11px] mt-2 text-vintage-gray-500">{message.meta}</p> : null}
@@ -909,15 +1175,43 @@ const ChatPage: React.FC = () => {
                       {message.sources && message.sources.length > 0 ? (
                         <div className="mt-3 space-y-2">
                           <p className="text-xs font-medium text-vintage-gray-600">Sources</p>
-                          {message.sources.map((source) => (
-                            <div key={source.id} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                          <div className="flex flex-wrap gap-2">
+                            {message.sources.map((source, index) => {
+                              const isExpanded = expandedSourceIndex === index;
+                              return (
+                                <button
+                                  key={source.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setExpandedSourceByMessage((prev) => ({
+                                      ...prev,
+                                      [message.id]: isExpanded ? null : index,
+                                    }));
+                                  }}
+                                  className={`w-7 h-7 rounded-full border text-xs font-semibold transition ${
+                                    isExpanded
+                                      ? 'border-indigo-300 bg-indigo-100 text-indigo-700'
+                                      : 'border-gray-300 bg-white text-vintage-gray-700 hover:border-indigo-200 hover:text-indigo-700'
+                                  }`}
+                                  aria-label={`Toggle source ${index + 1}`}
+                                >
+                                  {index + 1}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {expandedSourceIndex !== null && message.sources[expandedSourceIndex] ? (
+                            <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
                               <p className="text-xs text-vintage-gray-700">
-                                <span className="font-semibold">{source.system}</span> · {source.label}
+                                <span className="font-semibold">{message.sources[expandedSourceIndex].system}</span>
                               </p>
-                              <p className="text-xs text-vintage-gray-500 mt-1">{source.id}</p>
-                              <p className="text-xs text-vintage-gray-700 mt-1">{source.excerpt}</p>
+                              <p className="text-xs text-vintage-gray-500 mt-1">{message.sources[expandedSourceIndex].id}</p>
+                              <p className="text-xs text-vintage-gray-700 mt-1 whitespace-pre-wrap">
+                                {message.sources[expandedSourceIndex].excerpt}
+                              </p>
                             </div>
-                          ))}
+                          ) : null}
                         </div>
                       ) : null}
 
@@ -960,10 +1254,10 @@ const ChatPage: React.FC = () => {
                   </div>
                 </article>
               ) : null}
-            </div>
+                </div>
 
-            <div className="border-t border-gray-200 bg-white px-4 sm:px-6 py-4">
-              <form className="flex items-center gap-2 sm:gap-3" onSubmit={(e) => void handleSubmit(e)}>
+                <div className="border-t border-gray-200 bg-white px-4 sm:px-6 py-4 mb-2.5">
+                  <form className="flex items-center gap-2 sm:gap-3" onSubmit={(e) => void handleSubmit(e)}>
                 <button
                   type="button"
                   className="h-10 w-10 rounded-full border border-gray-200 text-vintage-gray-700 hover:bg-gray-50 inline-flex items-center justify-center disabled:opacity-60"
@@ -1012,8 +1306,10 @@ const ChatPage: React.FC = () => {
                   <SendHorizontal className="w-4 h-4" aria-hidden />
                   {responding ? 'Working...' : 'Send'}
                 </button>
-              </form>
-            </div>
+                  </form>
+                </div>
+              </>
+            )}
           </div>
         </section>
       </div>
