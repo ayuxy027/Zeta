@@ -177,30 +177,20 @@ const HeroSection: React.FC = () => {
 
                     {/* Content section */}
                     <div className="relative z-10 px-4 mx-auto max-w-4xl text-center">
-                        <h1 className="mb-4 text-5xl font-bold tracking-tight leading-tight text-gray-900 font-display sm:text-6xl lg:text-7xl">
-                            <span className="block sm:whitespace-nowrap">
+                        <h1 className="mb-8 text-5xl font-bold tracking-tight leading-tight text-gray-900 font-display sm:text-6xl lg:text-7xl">
+                            <span className="inline-block whitespace-nowrap">
+                                Your{' '}
                                 <Highlighter
                                     action="box"
                                     color="#6366f1"
                                     strokeWidth={2.7}
                                     animationDuration={3000}
                                 >
-                                    12 AI agents
+                                    AI Agent
                                 </Highlighter>
-                                , one marketplace
+                                {' '}Marketplace
                             </span>
                         </h1>
-                        <div className="mx-auto mb-6 flex max-w-2xl flex-col items-center justify-center gap-2 sm:flex-row sm:gap-3">
-                            <span className="rounded-full bg-indigo-50 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-indigo-800 ring-1 ring-indigo-200/80 sm:text-sm">
-                                Agent-to-agent (A2A)
-                            </span>
-                            <span className="text-center text-sm font-medium text-gray-600 sm:text-left sm:text-base">
-                                Dual-agent runs: a <span className="font-semibold text-gray-900">domain agent</span> pulls from your tool, then hands off to a <span className="font-semibold text-gray-900">partner agent</span> that answers.
-                            </span>
-                        </div>
-                        <p className="mx-auto mb-8 max-w-2xl text-base font-medium leading-relaxed text-center text-gray-600 sm:text-lg">
-                            Turn each tool on like a plugin. Core four: Gmail, Google Drive, Slack, and meetings. Then add Notion, GitHub, Jira, Salesforce, Zoho, Zoom, Microsoft 365, and Teams. Same roster, same place to ask.
-                        </p>
 
                         <p className="mx-auto mb-12 max-w-4xl text-lg font-medium leading-snug text-center text-gray-600 sm:text-xl">
                             <Highlighter
@@ -212,7 +202,7 @@ const HeroSection: React.FC = () => {
                                 delay={300}
                                 isView={true}
                             >
-                                Enable the agents you need
+                                Plugin-style agents
                             </Highlighter>
                             ,{' '}
                             <Highlighter
@@ -224,7 +214,7 @@ const HeroSection: React.FC = () => {
                                 delay={600}
                                 isView={true}
                             >
-                                connect each tool once
+                                A2A handoffs
                             </Highlighter>
                             , and{' '}
                             <Highlighter
@@ -236,9 +226,9 @@ const HeroSection: React.FC = () => {
                                 delay={900}
                                 isView={true}
                             >
-                                ask inside Zeta
+                                one place to ask
                             </Highlighter>
-                            , not{' '}
+                            {' '}instead of{' '}
                             <Highlighter
                                 action="strike-through"
                                 color="#ef4444"
@@ -248,7 +238,7 @@ const HeroSection: React.FC = () => {
                                 delay={1200}
                                 isView={true}
                             >
-                                reopening ten tabs
+                                another tab maze
                             </Highlighter>
                             .
                         </p>

@@ -47,16 +47,16 @@ const IntegrationSection: React.FC = () => {
                                 delay={600}
                                 isView={true}
                             >
-                                Twelve AI agents ship as plugins. Turn on Gmail, Drive, Slack, Meet, then add Notion to Teams.
-                            </Highlighter>
-                            Zeta is your marketplace: pick the agents you need, ask once, and answers pull from the tools you enabled. Runs use <span className="font-semibold text-gray-900">A2A</span>: one agent pulls from the plugin, a second agent answers.
+                                Twelve agents as plugins.
+                            </Highlighter>{' '}
+                            Core: Gmail, Drive, Slack, Meet. Add the rest when you want. A2A between agents.
                         </p>
 
                         <div className="space-y-4">
                             {[
-                                { icon: Clock, text: "Ship Gmail, Drive, Slack, and Meetings as your lead agents" },
-                                { icon: Zap, text: "Add Notion, GitHub, Jira, Salesforce, Zoho, Zoom, Office & Teams" },
-                                { icon: Shield, text: "Twelve plugins total—toggle agents on without bloating the UI" }
+                                { icon: Clock, text: 'Core: Gmail, Drive, Slack, Meet' },
+                                { icon: Zap, text: 'More: Notion, GitHub, Jira, Salesforce, Zoho, Zoom, Office, Teams' },
+                                { icon: Shield, text: 'Toggle agents on or off' },
                             ].map((item, i) => (
                                 <div key={i} className="flex gap-4 items-center">
                                     <div className="flex flex-shrink-0 justify-center items-center w-10 h-10 bg-gray-100 rounded-lg">

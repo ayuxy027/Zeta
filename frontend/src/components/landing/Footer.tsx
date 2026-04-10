@@ -41,7 +41,7 @@ const Footer: React.FC = () => {
                             <span className="text-xl font-display font-bold text-gray-900">Zeta</span>
                         </button>
                         <p className="text-sm text-gray-600">
-                            Twelve AI agents as plugins—your marketplace for work answers.
+                            Twelve plugins. One roster.
                         </p>
                     </div>
 
@@ -105,14 +105,9 @@ const Footer: React.FC = () => {
 
                 {/* Bottom Bar */}
                 <div className="mt-12 pt-8 border-t border-gray-200">
-                    <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-                        <p className="text-sm text-gray-600">
-                            © {currentYear} Zeta. All rights reserved.
-                        </p>
-                        <p className="text-sm text-gray-600">
-                            Plug in agents. Ask once. Skip the tab maze.
-                        </p>
-                    </div>
+                    <p className="text-sm text-gray-600">
+                        © {currentYear} Zeta. All rights reserved.
+                    </p>
                 </div>
             </div>
         </footer>

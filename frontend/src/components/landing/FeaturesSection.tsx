@@ -9,28 +9,28 @@ const FeaturesSection: React.FC = () => {
     const features = [
         {
             icon: RiSpeakAiLine,
-            title: '12 Plugin Agents',
-            desc: 'Every integration is an installable AI agent—not a buried setting',
+            title: '12 agents',
+            desc: 'Every integration is its own agent. Toggle tools on or off—nothing buried in settings.',
             delay: 100
         },
         {
             icon: GrDocumentVerified,
-            title: 'Agent Marketplace',
-            desc: 'Browse Gmail to Teams, enable agents, and route questions smartly',
+            title: 'Marketplace',
+            desc: 'One roster from Gmail to Teams. Enable only what your team actually uses.',
             delay: 200
         },
         {
             icon: LiaRunningSolid,
-            title: 'Core + Extended',
-            desc: 'Lead with mail, Drive, Slack, meetings. Stack the rest when ready',
+            title: 'Core stack',
+            desc: 'Start with mail, Drive, Slack, and Meet. Add Notion, GitHub, Jira, and the rest when you need them.',
             delay: 300
         },
         {
             icon: TbArrowsRightLeft,
-            title: 'A2A dual agents',
-            desc: 'Agent-to-agent (A2A): domain agent fetches from a tool, partner agent synthesizes and replies',
+            title: 'A2A',
+            desc: 'For trickier asks, one agent pulls from a tool; a partner agent turns that into a clear reply.',
             delay: 400
-        }
+        },
     ];
 
     return (
@@ -40,7 +40,6 @@ const FeaturesSection: React.FC = () => {
             <div className="relative px-6 mx-auto max-w-6xl lg:px-8">
                 <div className="mb-20 text-center">
                     <h2 className="mb-6 text-4xl font-bold tracking-tight text-gray-900 font-display sm:text-5xl lg:text-6xl">
-                        Shop{' '}
                         <Highlighter
                             action="highlight"
                             color="#fef3c7"
@@ -50,17 +49,12 @@ const FeaturesSection: React.FC = () => {
                             delay={200}
                             isView={true}
                         >
-                            AI Agents
+                            AI agents
                         </Highlighter>{' '}
-                        Like Plugins
+                        as plugins
                     </h2>
-                    <p className="mx-auto max-w-3xl text-xl leading-relaxed text-gray-600">
-                        Not another silent chatbot.{' '}
-                        <span className="font-semibold text-gray-900">Twelve plugin agents, one roster, and A2A handoffs on every serious query.</span>
-                    </p>
-                    <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-500">
-                        Core mail, Drive, Slack, and meetings, then Notion through Teams.{' '}
-                        <span className="font-semibold text-gray-700">Domain agent pulls data; partner agent packages the answer.</span>
+                    <p className="mx-auto max-w-2xl text-lg leading-relaxed text-gray-600">
+                        Twelve agents, one roster. Turn on Gmail to Teams. A2A when a query needs two steps.
                     </p>
                 </div>
 
