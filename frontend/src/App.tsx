@@ -8,6 +8,7 @@ import ChangelogPage from './pages/ChangelogPage';
 import BlogPage from './pages/BlogPage';
 import DashboardPage from './pages/DashboardPage';
 import DriveIngestPage from './pages/DriveIngestPage';
+import MailPage from './pages/MailPage';
 import LoginPage from './pages/LoginPage';
 import RequireAuth from './auth/RequireAuth';
 
@@ -46,6 +47,14 @@ const App: React.FC = () => {
           element={(
             <RequireAuth>
               <DriveIngestPage />
+            </RequireAuth>
+          )}
+        />
+        <Route
+          path="/dashboard/mail"
+          element={(
+            <RequireAuth>
+              <MailPage />
             </RequireAuth>
           )}
         />
