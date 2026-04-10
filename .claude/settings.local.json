@@ -40,7 +40,10 @@
       "Bash(node_modules/.bin/tsc --noEmit)",
       "Bash(grep -r \"vintage\" D:/Coding/Zeta/frontend/tailwind.config*)",
       "Bash(ls D:/Coding/Zeta/frontend/src/*.css)",
-      "Bash(grep -rn \"theme\" D:/Coding/Zeta/frontend/vite.config*)"
+      "Bash(grep -rn \"theme\" D:/Coding/Zeta/frontend/vite.config*)",
+      "Bash(bash seed-demo.sh)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\);console.log\\(r.answer?.slice\\(0,120\\)+'...'\\);console.log\\('Sources:',r.sources?.map\\(s=>s.source_type\\).join\\(', '\\)\\)}\\)\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\);console.log\\('Counts:',JSON.stringify\\(r.counts\\)\\);console.log\\('Distribution:',JSON.stringify\\(r.distribution\\)\\);console.log\\('Decisions:',r.decisions?.length\\)}\\)\")"
     ]
   }
 }
