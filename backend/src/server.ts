@@ -2,10 +2,21 @@ import 'dotenv/config';
 import cors from 'cors';
 import express, { type Request, type Response } from 'express';
 import oidc from 'express-openid-connect';
+import slackRouter from './routers/slack.router.js';
+
+const { auth, requiresAuth } = oidc;
 
 const port = Number(process.env.PORT ?? 3001);
 const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 const { auth, requiresAuth } = oidc;
+
+const getRequiredEnv = (name: string): string => {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+};
 
 const getRequiredEnv = (name: string): string => {
   const value = process.env[name]?.trim();
@@ -25,6 +36,9 @@ app.use(
 );
 
 app.use(express.json());
+
+// Slack webhook endpoint (no auth required - must be before auth middleware)
+app.use('/slack', slackRouter);
 
 app.use(
   auth({
