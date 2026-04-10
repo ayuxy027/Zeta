@@ -43,14 +43,18 @@ router.post('/events', async (req: Request, res: Response) => {
     }
     
     // Drop to queue for async processing (3-second rule)
-    const jobData: SlackJobData = {
-      event_id: body.event_id,
-      event: body.event,
-      timestamp: Date.now(),
-    };
-    
-    await slackQueue.add('slack-event', jobData);
-    console.log(`Slack event ${body.event_id} queued for processing`);
+    if (slackQueue) {
+      const jobData: SlackJobData = {
+        event_id: body.event_id,
+        event: body.event,
+        timestamp: Date.now(),
+      };
+      
+      await slackQueue.add('slack-event', jobData);
+      console.log(`Slack event ${body.event_id} queued for processing`);
+    } else {
+      console.warn(`Slack event ${body.event_id} received but queue not available - skipping`);
+    }
     
     // Return immediately (must be < 3 seconds)
     return res.status(200).json({ ok: true });
