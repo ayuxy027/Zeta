@@ -10,21 +10,52 @@ decided—and answers natural-language questions with answers you can audit back
 to real sources (email, chat, docs, meetings).
 
 
+THE BLUNT PROBLEM (POSITIONING)
+-------------------------------
+• **Black-box answers:** Models say X with no clear trace of which system was
+  queried, what was read, or why that conclusion followed.
+• **Fragmented truth:** Mail, chat, docs, and meetings each hold part of the
+  story; teams rarely get a single narrative that says *what happened where*
+  and *what to trust*.
+
+Our wedge is not “another integration bundle.” It is **visible reasoning and
+provenance**: a chain from question → retrieval → analysis → answer, with
+**sources**—not a single opaque chat bubble.
+
+
+PRODUCT FRAMING (IDEATION — NOT “PLUGINS”)
+------------------------------------------
+We position the product as a **personalized AI agent workspace** (or
+**agent marketplace** in the sense of *your org’s* agents, not third-party
+stores):
+
+• Each connected system is an **agent**: e.g. Gmail = mailing agent, Drive =
+  documents agent, Slack = chat agent, meetings = meeting / transcript agent.
+• Users ask in plain English; the stack routes work to the right **domain
+  agents**, then to **worker / analysis** steps, then to a **presentation
+  agent** that explains what happened, where, and with what sources.
+
+Names are illustrative (e.g. a “Sandy”-style presenter). What matters is the
+**split**: domain retrieval vs analysis vs **voice of the system** that ties
+the room together.
+
+
 CORE CHALLENGE
 --------------
 Organizations scatter context across tools. Decisions look like outcomes in
 tickets or slides, while the *reasoning* (tradeoffs, constraints, who argued
 what) lives in threads, inboxes, and transcripts. The challenge is to passively
 collect that material, preserve rationale alongside facts, and expose it
-through trustworthy Q&A.
+through trustworthy Q&A—with **reasoning visible**, not buried.
 
 
 WHAT TO BUILD
 -------------
 1. MULTI-AGENT AI SYSTEM
-   Use more than one distinct role or step in the pipeline (e.g. ingest,
-   retrieve, synthesize; or planner + tool-using agents). The architecture
-   should be decomposable—not a single opaque model call for everything.
+   Use more than one distinct role or step: domain agents (per tool),
+   orchestration, optional tool-style analysis on retrieved payloads, and a
+   **presentation layer** that narrates timeline + sources. The architecture
+   should be decomposable—not one opaque model call for everything.
 
 2. PASSIVE COLLECTION FROM COMPANY TOOLS
    Ingestion should feel ongoing and tool-driven, not “paste text to chat each
@@ -44,6 +75,15 @@ WHAT TO BUILD
    Answers must show *where* the information came from: which message, thread,
    doc section, or meeting segment supports each claim—not uncited model prose.
 
+5. FRONTEND-FORWARD REASONING (UX)
+   The UI should make the workflow **legible**: e.g. a **trace** of steps
+   (retrieve, filter, analyze, synthesize) with expandable “thinking,” timed
+   or staged for clarity. Implementation may combine **real** API calls with
+   **structured LLM output** that fills step labels and narratives—so the
+   *experience* of a busy agent factory can be delivered strategically while
+   the backend remains honest about what is live vs simulated (document in
+   baseline / README for judges).
+
 
 EXAMPLE QUESTIONS (ILLUSTRATIVE)
 --------------------------------
@@ -51,6 +91,8 @@ EXAMPLE QUESTIONS (ILLUSTRATIVE)
 • “What breaks if we change this feature?”
 • “Who pushed back on the timeline and what was their concern?”
 • “What did we agree about the API contract last quarter?”
+• “Get me the latest mails from client X” (routes to Gmail agent + downstream
+  analysis + presenter narrative)
 
 
 NAMED INTEGRATIONS / STACK (REFERENCE)
@@ -82,11 +124,16 @@ SUCCESS LOOKS LIKE
 • A demo query whose answer cites concrete sources (ids, links, or excerpts
   tied to origin).
 • A credible multi-agent story visible in code or architecture.
+• **Ideation-aligned:** A **visible trace** (steps + optional presenter voice)
+  so judges feel *reasoning* and *provenance*, not only a final paragraph.
+• **Honesty:** If some trace steps are **metaphorical** or **LLM-generated**
+  for UX, say so in docs—anchor the demo with at least **one** real retrieval
+  or citation path so the story stays credible.
 
 
 PROJECT NOTES (THIS REPO)
 -------------------------
-For an expanded “ideal state vs bare minimum” checklist used alongside this PS,
+For ideal state vs bare minimum, demo “wow” floor, and agent-framing detail,
 see: docs/baseline.md
 
 ================================================================================
