@@ -1,101 +1,259 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  Hash, Mail, FileText, Mic, 
+  MessageSquare, Settings, 
+  TrendingUp, Users, Database, Layers,
+  ChevronRight, Activity, Clock, AlertCircle
+} from 'lucide-react';
+import { authConfig } from '../auth/config';
+
+type StatsData = {
+  counts: { decisions: number; people: number; topics: number; sources: number };
+  decisions: { decision: string; people: string[]; topics: string[]; source: string; when: string }[];
+  distribution: Record<string, number>;
+};
+
+const SOURCE_COLORS: Record<string, string> = {
+  slack: '#a855f7',
+  gmail: '#ef4444', 
+  drive: '#3b82f6',
+  meeting: '#f59e0b',
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  slack: 'Slack', gmail: 'Gmail', drive: 'Drive', meeting: 'Meeting',
+};
 
 const DashboardPage: React.FC = () => {
-  const stats = [
-    { name: 'Total Meetings', value: 124 },
-    { name: 'Hours Transcribed', value: 248 },
-    { name: 'Action Items', value: 89 },
-    { name: 'Members', value: 12 }
+  const navigate = useNavigate();
+  const [stats, setStats] = React.useState<StatsData | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${authConfig.backendUrl}/api/stats`, { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to fetch stats');
+        const data = await res.json() as StatsData;
+        if (!cancelled) setStats(data);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const kpis = stats ? [
+    { label: 'Decisions Tracked', value: stats.counts.decisions, sub: 'from knowledge graph', icon: Database, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { label: 'Sources Indexed', value: stats.counts.sources, sub: 'Slack + Gmail + Drive', icon: Layers, color: 'text-purple-600', bg: 'bg-purple-50' },
+    { label: 'People Identified', value: stats.counts.people, sub: 'auto-extracted', icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'Topics Extracted', value: stats.counts.topics, sub: 'via LLM extraction', icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
+  ] : [
+    { label: 'Decisions Tracked', value: '-', sub: 'loading...', icon: Database, color: 'text-gray-400', bg: 'bg-gray-50' },
+    { label: 'Sources Indexed', value: '-', sub: 'loading...', icon: Layers, color: 'text-gray-400', bg: 'bg-gray-50' },
+    { label: 'People Identified', value: '-', sub: 'loading...', icon: Users, color: 'text-gray-400', bg: 'bg-gray-50' },
+    { label: 'Topics Extracted', value: '-', sub: 'loading...', icon: TrendingUp, color: 'text-gray-400', bg: 'bg-gray-50' },
   ];
 
-  const recentMeetings = [
-    { id: 1, name: 'Team Sync Meeting', date: 'Nov 10, 2024', duration: '45 min', status: 'Completed' },
-    { id: 2, name: 'Product Planning', date: 'Nov 9, 2024', duration: '1 hr 15 min', status: 'Completed' },
-    { id: 3, name: 'Weekly Review', date: 'Nov 8, 2024', duration: '30 min', status: 'Completed' },
-    { id: 4, name: 'Client Call', date: 'Nov 7, 2024', duration: '1 hr', status: 'Processing' }
+  const sourceEntries = stats ? Object.entries(stats.distribution).sort((a, b) => b[1] - a[1]) : [];
+
+  const connectors = [
+    { name: 'Slack', value: stats?.distribution.slack ?? 0, color: '#a855f7', connected: true },
+    { name: 'Gmail', value: stats?.distribution.gmail ?? 0, color: '#ef4444', connected: true },
+    { name: 'Drive', value: stats?.distribution.drive ?? 0, color: '#3b82f6', connected: true },
+    { name: 'Meeting', value: stats?.distribution.meeting ?? 0, color: '#f59e0b', connected: true },
   ];
 
-  const recentActivity = [
-    { id: 1, action: 'New meeting transcribed', meeting: 'Team Sync Meeting', time: '2 hours ago' },
-    { id: 2, action: 'Action items generated', meeting: 'Product Planning', time: '1 day ago' },
-    { id: 3, action: 'Summary shared', meeting: 'Weekly Review', time: '2 days ago' }
-  ];
+  const recentDecisions = stats?.decisions.slice(0, 5) ?? [];
 
   return (
-    <div className="min-h-screen bg-vintage-white pt-20">
-      <div className="max-w-7xl mx-auto p-6">
-        <h1 className="text-3xl font-bold mb-8">Dashboard</h1>
-        
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat, index) => (
-            <div key={index} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <p className="text-gray-500 text-sm">{stat.name}</p>
-              <p className="text-3xl font-bold mt-2">{stat.value}</p>
+    <div className="min-h-screen bg-vintage-white pt-20 pb-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-vintage-black">Dashboard</h1>
+          <p className="text-sm text-vintage-gray-500 mt-1">Your organizational memory at a glance</p>
+        </div>
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {kpis.map((kpi, i) => (
+            <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-3">
+                <span className={`w-9 h-9 rounded-lg ${kpi.bg} flex items-center justify-center`}>
+                  <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
+                </span>
+                {stats && (
+                  <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium">
+                    <Activity className="w-2.5 h-2.5" />
+                    Live
+                  </span>
+                )}
+              </div>
+              <p className="text-2xl sm:text-3xl font-bold text-vintage-black">{kpi.value}</p>
+              <p className="text-xs text-vintage-gray-500 mt-1">{kpi.label}</p>
+              <p className="text-[10px] text-vintage-gray-400">{kpi.sub}</p>
             </div>
           ))}
         </div>
-        
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h2 className="text-xl font-semibold mb-4">Weekly Activity</h2>
-            <div className="h-64 flex items-end space-x-2 pt-8">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => {
-                // Using index to create a deterministic height instead of random
-                const heights = [30, 60, 45, 75, 50, 20, 40]; // Fixed values for consistent rendering
-                const height = heights[index % heights.length];
-                return (
-                  <div key={day} className="flex flex-col items-center flex-1">
-                    <div 
-                      className="w-full bg-indigo-500 rounded-t hover:bg-indigo-600 transition-colors" 
-                      style={{ height: `${height}%` }}
-                    ></div>
-                    <span className="text-xs mt-2 text-gray-500">{day}</span>
+
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Connectors & Distribution */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Connectors Status */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-semibold text-vintage-black">Connected Sources</h2>
+                <span className="flex items-center gap-1.5 text-[11px] text-vintage-gray-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Syncing
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {connectors.map((conn) => (
+                  <div key={conn.name} className="rounded-xl border border-gray-100 bg-gray-50/50 p-3 text-center">
+                    <div className="w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center" style={{ background: `${conn.color}15` }}>
+                      {conn.name === 'Slack' && <Hash className="w-4 h-4" style={{ color: conn.color }} />}
+                      {conn.name === 'Gmail' && <Mail className="w-4 h-4" style={{ color: conn.color }} />}
+                      {conn.name === 'Drive' && <FileText className="w-4 h-4" style={{ color: conn.color }} />}
+                      {conn.name === 'Meeting' && <Mic className="w-4 h-4" style={{ color: conn.color }} />}
+                    </div>
+                    <p className="text-sm font-medium text-vintage-black">{conn.name}</p>
+                    <p className="text-xs text-vintage-gray-500">{conn.value} sources</p>
+                    {conn.connected && (
+                      <span className="inline-block mt-1 text-[10px] text-emerald-600 font-medium">Connected</span>
+                    )}
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          </div>
-          
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h2 className="text-xl font-semibold mb-4">Recent Meetings</h2>
-            <div className="space-y-4">
-              {recentMeetings.map((meeting) => (
-                <div key={meeting.id} className="flex items-center justify-between p-3 border-b border-gray-100 last:border-0">
-                  <div>
-                    <h3 className="font-medium">{meeting.name}</h3>
-                    <p className="text-sm text-gray-500">{meeting.date} • {meeting.duration}</p>
-                  </div>
-                  <div>
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      meeting.status === 'Completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {meeting.status}
-                    </span>
-                    <button className="ml-4 text-indigo-600 hover:underline">View</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        
-        {/* Recent Activity */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
-          <div className="space-y-4">
-            {recentActivity.map((activity) => (
-              <div key={activity.id} className="flex items-start">
-                <div className="bg-indigo-100 p-2 rounded-full mr-4">
-                  <div className="w-2 h-2 bg-indigo-600 rounded-full"></div>
-                </div>
-                <div>
-                  <p className="font-medium">{activity.action}</p>
-                  <p className="text-sm text-gray-500">{activity.meeting} • {activity.time}</p>
+
+            {/* Source Distribution */}
+            {sourceEntries.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <h2 className="text-base font-semibold text-vintage-black mb-4">Source Distribution</h2>
+                <div className="space-y-3">
+                  {sourceEntries.map(([key, count]) => {
+                    const total = Object.values(stats?.distribution ?? {}).reduce((a, b) => a + b, 0) || 1;
+                    const pct = Math.round((count / total) * 100);
+                    return (
+                      <div key={key}>
+                        <div className="flex items-center justify-between text-xs text-vintage-gray-600 mb-1.5">
+                          <span className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full" style={{ background: SOURCE_COLORS[key] ?? '#94a3b8' }} />
+                            {SOURCE_LABELS[key] ?? key}
+                          </span>
+                          <span className="font-semibold">{count} ({pct}%)</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{ width: `${pct}%`, background: SOURCE_COLORS[key] ?? '#94a3b8' }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            ))}
+            )}
+          </div>
+
+          {/* Right Sidebar */}
+          <div className="space-y-6">
+            {/* Quick Actions */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="text-base font-semibold text-vintage-black mb-4">Quick Actions</h2>
+              <div className="space-y-2">
+                <button
+                  onClick={() => navigate('/dashboard/chat')}
+                  className="w-full flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5 text-left hover:border-indigo-300 hover:bg-indigo-50/30 transition group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center group-hover:bg-indigo-100">
+                    <MessageSquare className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-vintage-black">Ask a Question</p>
+                    <p className="text-[11px] text-vintage-gray-500">Query your knowledge graph</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-vintage-gray-400" />
+                </button>
+
+                <button
+                  onClick={() => navigate('/connectors')}
+                  className="w-full flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5 text-left hover:border-purple-300 hover:bg-purple-50/30 transition group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center group-hover:bg-purple-100">
+                    <Settings className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-vintage-black">Manage Connectors</p>
+                    <p className="text-[11px] text-vintage-gray-500">Configure data sources</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-vintage-gray-400" />
+                </button>
+              </div>
+            </div>
+
+            {/* Recent Decisions */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-semibold text-vintage-black">Recent Decisions</h2>
+                {stats && (
+                  <span className="text-[10px] text-vintage-gray-400 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    Live
+                  </span>
+                )}
+              </div>
+              
+              {loading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="animate-pulse flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-gray-100" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 bg-gray-100 rounded w-3/4" />
+                        <div className="h-2 bg-gray-50 rounded w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : error ? (
+                <div className="flex items-center gap-2 text-red-500 text-xs py-4">
+                  <AlertCircle className="w-4 h-4" />
+                  {error}
+                </div>
+              ) : recentDecisions.length === 0 ? (
+                <p className="text-sm text-vintage-gray-400 py-4 text-center">No decisions yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {recentDecisions.map((dec, i) => {
+                    const sourceColor = SOURCE_COLORS[dec.source] ?? '#94a3b8';
+                    return (
+                      <div key={i} className="rounded-lg border border-gray-100 bg-gray-50/50 p-3 hover:bg-gray-100/50 transition">
+                        <p className="text-sm text-vintage-black line-clamp-2">{dec.decision}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-[11px] text-vintage-gray-500">{dec.people.join(', ')}</span>
+                          <span 
+                            className="rounded-full px-2 py-0.5 text-[10px] font-medium capitalize"
+                            style={{ background: `${sourceColor}15`, color: sourceColor }}
+                          >
+                            {SOURCE_LABELS[dec.source] ?? dec.source}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
