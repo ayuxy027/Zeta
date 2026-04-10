@@ -19,6 +19,10 @@ const Navbar: React.FC = () => {
 
   const toggleMenu = () => setIsMenuOpen((value) => !value);
   const closeMenu = () => setIsMenuOpen(false);
+  const getUserInitial = () => {
+    const value = user?.name || user?.email || "U";
+    return value.charAt(0).toUpperCase();
+  };
 
   return (
     <header className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex items-center justify-between px-6 py-3 md:py-4 shadow-lg rounded-full bg-white/95 backdrop-blur-sm border border-gray-100/50 w-[calc(100%-2rem)] max-w-5xl">
@@ -64,7 +68,7 @@ const Navbar: React.FC = () => {
           <div className="md:hidden flex flex-col items-center gap-3 mt-4">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
-                {(user?.name || user?.email || "U")[0].toUpperCase()}
+                {getUserInitial()}
               </div>
               <span className="text-sm font-medium text-gray-700">
                 {user?.name ?? user?.email ?? "Signed in"}
@@ -125,7 +129,7 @@ const Navbar: React.FC = () => {
               className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
             >
               <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
-                {(user?.name || user?.email || "U")[0].toUpperCase()}
+                {getUserInitial()}
               </div>
               <span className="text-sm font-medium text-gray-700 max-w-[120px] truncate">
                 {user?.name ?? user?.email ?? "Signed in"}

@@ -26,6 +26,16 @@ export async function initDb(): Promise<void> {
   });
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS "User" (
+      id TEXT PRIMARY KEY,
+      "auth0Sub" TEXT NOT NULL UNIQUE,
+      email TEXT,
+      name TEXT,
+      picture TEXT,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS google_drive_connections (
       user_sub TEXT PRIMARY KEY,
       refresh_token_encrypted TEXT NOT NULL,
@@ -56,5 +66,5 @@ export async function initDb(): Promise<void> {
     );
   `);
 
-  console.log('[db] Migrations applied (google_drive_connections, google_mail_connections, document_extractions).');
+  console.log('[db] Migrations applied (User, google_drive_connections, google_mail_connections, document_extractions).');
 }

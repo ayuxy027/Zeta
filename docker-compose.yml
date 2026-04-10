@@ -1,6 +1,20 @@
 name: zeta
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: zeta
+      POSTGRES_USER: zeta
+      POSTGRES_PASSWORD: zeta
+    volumes:
+      - zeta_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U zeta -d zeta']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   redis:
     image: redis:7-alpine
     healthcheck:
@@ -16,7 +30,7 @@ services:
     volumes:
       - zeta_neo4j:/data
     healthcheck:
-      test: ['CMD-SHELL', 'wget -q --spider http://localhost:7474 || exit 1']
+      test: ['CMD-SHELL', 'cypher-shell -a bolt://localhost:7687 -u neo4j -p password "RETURN 1" >/dev/null 2>&1 || exit 1']
       interval: 10s
       timeout: 10s
       retries: 10
@@ -26,7 +40,7 @@ services:
     volumes:
       - zeta_chroma:/chroma/chroma
     healthcheck:
-      test: ['CMD-SHELL', 'wget -q --spider http://localhost:8000/api/v2/heartbeat || exit 1']
+      test: ['CMD-SHELL', 'bash -lc ''</dev/tcp/localhost/8000'' || exit 1']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -48,6 +62,8 @@ services:
       NEO4J_PASSWORD: password
       CHROMADB_URL: http://chromadb:8000
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       neo4j:
@@ -56,5 +72,6 @@ services:
         condition: service_healthy
 
 volumes:
+  zeta_postgres:
   zeta_neo4j:
   zeta_chroma:

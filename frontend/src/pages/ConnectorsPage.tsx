@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2, Link2, Unlink } from 'lucide-react';
+import { Link2, Unlink } from 'lucide-react';
 import {
   fetchGoogleWorkspaceStatus,
   disconnectGoogleWorkspace,
@@ -29,6 +29,7 @@ const ConnectorsPage: React.FC = () => {
       const timer = setTimeout(() => setBanner(null), 3000);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [banner]);
 
   // ── Load statuses ────────────────────────────────────────────────────────

@@ -1,0 +1,498 @@
+================================================================================
+                    A2A CHAT UI PRINCIPLES - Andrew & David
+                    For Zeta Visualiser Mode Overhaul
+================================================================================
+
+This document outlines the UI principles and patterns used in the Andrew+David
+(legal a2a module) that can be adapted for Zeta's Visualiser mode.
+
+
+================================================================================
+1. CORE ARCHITECTURE: DUAL-AGENT ORCHESTRATION
+================================================================================
+
+The A2A system uses a TWO-AGENT pipeline where each agent has a distinct role:
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         USER QUERY                                       │
+└─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  AGENT 1: DAVID (Backend Agent / Analysis)                              │
+│  ────────────────────────────────────                                 │
+│  • Analyzes query intent                                             │
+│  • Detects legal/business areas                                       │
+│  • Matches to appropriate specialists (lawyers)                      │
+│  • Performs RAG retrieval (chroma + neo4j)                           │
+│  • Returns structured result with confidence score                     │
+└─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                            [Focus Transfer]
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  AGENT 2: SANDY (Frontend Agent / Presentation)                       │
+│  ────────────────────────────────────────                              │
+│  • Receives David's structured result                                  │
+│  • Formats for user-friendly presentation                               │
+│  • Creates presentation cards (lawyer cards in legal)               │
+│  • Adds UI context, metadata                                        │
+│  • Returns polished message                                        │
+└─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌──────────��──────────────────────────────────────────────────────────────┐
+│                      FINAL RESPONSE                                     │
+│  • Formatted text content                                             │
+│  • Presentation cards (lawyer cards, data cards)                      │
+│  • Query context (detected areas, confidence)                        │
+│  • Metadata (sources, progress stages)                               │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+2. PROGRESS STAGE SYSTEM
+================================================================================
+
+Each agent has a LINEAR STAGE SYSTEM that guides the user through the flow:
+
+----- DAVID'S STAGES -----
+Stage 1: "analyzing"
+  - Meaning: Initial query understanding
+  - Progress: 10-20%
+  - Message: "David is analyzing your query..."
+  - UI: Glow on David icon, progress bar at 20%
+
+Stage 2: "matching"
+  - Meaning: Finding matching lawyers/specialists from DB
+  - Progress: 40-60%
+  - Message: "David is finding the best legal experts..."
+  - UI: David still glowing, bar growing
+
+Stage 3: "ranking"
+  - Meaning: Ranking and scoring matches
+  - Progress: 80%
+  - Message: "David is ranking the best matches..."
+  - UI: Almost done, preparing transfer
+
+Stage 4: "complete"
+  - Meaning: Analysis finished, ready to present
+  - Progress: 100%
+  - Message: "David has completed analysis!"
+  - UI: Focus slides to Sandy
+
+
+----- SANDY'S STAGES -----
+Stage 1: "processing"
+  - Meaning: Receiving David's analysis
+  - Progress: 20%
+  - Message: "Sandy is receiving David's analysis..."
+  - UI: Focus transferred to Sandy
+
+Stage 2: "formatting"
+  - Meaning: Formatting the response
+  - Progress: 60%
+  - Message: "Sandy is crafting your response..."
+  - UI: Sandy icon glowing, bar at 60%
+
+Stage 3: "presenting"
+  - Meaning: Final presentation preparation
+  - Progress: 90%
+  - Message: "Sandy is finalizing your response..."
+  - UI: Almost complete
+
+Stage 4: "complete"
+  - Meaning: Response ready
+  - Progress: 100%
+  - Message: "Here are your results!"
+  - UI: Response displayed
+
+
+================================================================================
+3. UI COMPONENTS & PRINCIPLES
+================================================================================
+
+PRINCIPLE #1: DUAL-ICON LAYOUT
+───────────────────────────────────────────────
+• Two agent icons displayed side-by-side
+• Left: David (analysis) | Right: Sandy (presentation)
+• Icons represent: 🤖 (analysis brain) + 👤 (friendly presenter)
+• Always visible, even when inactive
+
+PRINCIPLE #2: FOCUS PASSING
+───────────────────────────────────────────────
+• Only ONE agent is "active" at a time
+• Active agent gets:
+  - Pulsing glow animation (box-shadow/ring)
+  - Progress indicator
+  - Stage message below
+• Inactive agent:
+  - Dimmed (opacity: 0.5)
+  - No glow
+  - "Waiting" indicator
+
+The focus visually "moves" from David → Sandy when analysis completes
+
+Example CSS for focus:
+```css
+.agent-active {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.agent-inactive {
+  opacity: 0.4;
+  filter: grayscale(30%);
+}
+```
+
+PRINCIPLE #3: PROGRESS BAR PER AGENT
+───────────────────────────────────────────────
+• Each agent has its own progress bar
+• Shows 0-100% completion
+• Smooth transition animations
+• Color indicates state:
+  - Blue/Indigo: In progress
+  - Green: Complete
+  - Gray: Not started
+
+PRINCIPLE #4: STAGE MESSAGES
+───────────────────────────────────────────────
+• Clear, human-readable messages
+• Written in first person ("I am analyzing...")
+• Always shows current action
+• Updates in real-time
+• Displayed below the active agent
+
+PRINCIPLE #5: CARD-BASED RESPONSE
+───────────────────────────────────────────────
+• Response isn't just text - it's CARDS
+• Lawyer cards in legal app contain:
+  - Lawyer name, photo placeholder
+  - Specialization
+  - Match score (0-100%)
+  - Why recommended (bullets)
+  - Primary indicator (gold border for #1)
+  - Contact/rate info
+
+Card structure:
+```tsx
+<Card className={isPrimary ? 'border-yellow-400' : 'border-gray-200'}>
+  <CardHeader>
+    <LawyerAvatar />
+    <MatchScore score={85} />
+  </CardHeader>
+  <CardBody>
+    <LawyerName />
+    <Specialization />
+    <WhyRecommended reasons={['Expert in Family Law', '15+ years']} />
+  </CardBody>
+  <CardFooter>
+    <ConsultationPrice />
+  </CardFooter>
+</Card>
+```
+
+PRINCIPLE #6: TOOL CALL TRACKING
+───────────────────────────────────────────────
+• Backend tracks each "tool call"
+• Shows in order of execution:
+  1. analyze_legal_query (David)
+  2. format_response (Sandy)
+• Each tool call shows:
+  - Status: pending → running → completed → failed
+  - Duration (ms)
+  - Output preview
+
+UI shows mini pipeline:
+```
+[ David: analyze ] ─▶ [ Sandy: format ]
+      │                    │
+   running              pending
+    320ms               
+```
+
+
+================================================================================
+4. ORCHESTRATOR FLOW (TIMING & TRANSITIONS)
+================================================================================
+
+FULL FLOW WITH TIMINGS:
+───────────────────────────────────────────────
+
+T=0ms   User submits query
+         │
+         ▼
+T+100ms Query validation (Sandy checks if legal/off-topic)
+         │
+         ▼
+T+200ms Focus moves to David
+         David: "analyzing" (10-20%)
+         │
+         ▼
+T+800ms David: "matching" (40-60%)
+         Query RAG in chromadb
+         │
+         ▼
+T+1200ms David: "ranking" (80%)
+         Neo4j graph lookup
+         │
+         ▼
+T+1500ms David: "complete" (100%)
+         Transfer to Sandy
+         │
+         ▼
+T+1600ms Focus slides to Sandy
+         Sandy: "processing" (20%)
+         │
+         ▼
+T+2000ms Sandy: "formatting" (60%)
+         Building response
+         │
+         ▼
+T+2300ms Sandy: "presenting" (90%)
+         Final polish
+         │
+         ▼
+T+2500ms Sandy: "complete" (100%)
+         Response rendered
+         │
+         ▼
+T+2600ms Cards displayed + text content
+
+
+================================================================================
+5. TYPES & INTERFACES
+================================================================================
+
+----- DAVID RESULT -----
+interface DavidResult {
+  matchedLawyers: Lawyer[];
+  queryContext: {
+    originalQuery: string;
+    detectedSpecializations: string[];
+    confidence: number;
+    reasoning: string;
+  };
+  recommendations: {
+    primaryMatch: Lawyer | null;
+    alternativeMatches: Lawyer[];
+    whyThisMatch: string;
+  };
+}
+
+----- DAVID PROGRESS -----
+interface DavidProgress {
+  stage: "analyzing" | "matching" | "ranking" | "complete";
+  message: string;
+  progress: number;
+}
+
+----- SANDY MESSAGE -----
+interface AndrewMessage {
+  id: string;
+  type: "user" | "bot" | "system";
+  content: string;
+  timestamp: number;
+  lawyerCards?: LawyerCard[];
+  queryContext?: {
+    specializations: string[];
+    confidence: number;
+    reasoning: string;
+  };
+}
+
+----- ORCHESTRATOR PROGRESS -----
+interface AgentProgress {
+  stage: "david" | "sandy" | "complete";
+  davidProgress?: DavidProgress;
+  sandyProgress?: SandyProgress;
+  message: string;
+  progress: number;
+  toolCalls?: ToolCall[];
+}
+
+----- TOOL CALL -----
+interface ToolCall {
+  id: string;
+  agent: "david" | "sandy";
+  toolName: string;
+  input: any;
+  output?: any;
+  status: "pending" | "running" | "completed" | "failed";
+  timestamp: number;
+  duration?: number;
+}
+
+
+================================================================================
+6. VISUAL DESIGN SPECIFICATIONS
+================================================================================
+
+----- ICON SPECS -----
+• Size: 48x48px (or w-12 h-12 in Tailwind)
+• Border radius: full (circle) or rounded-lg
+• Background: agent color with 10-20% opacity
+• Icon: Simple line art (20px)
+
+----- FOCUS GLOW EFFECT -----
+```css
+@keyframes agent-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px 4px rgba(99, 102, 241, 0.6);
+  }
+}
+
+.agent-active {
+  animation: agent-pulse 2s ease-in-out infinite;
+}
+```
+
+----- PROGRESS BAR -----
+• Height: 4-6px
+• Border radius: full
+• Background: gray-100
+• Fill: gradient from agent-primary to agent-secondary
+• Transition: width 300ms ease-out
+
+----- STAGE MESSAGE -----
+• Font: text-sm (14px)
+• Color: agent-primary (indigo-600)
+• Weight: medium (500)
+• Animation: fade-in on change
+
+----- CARD DESIGN -----
+• Border: 1px solid
+• Border radius: xl (12px)
+• Padding: p-4
+• Shadow: subtle (shadow-sm)
+• Hover: shadow-md with scale(1.02)
+
+
+================================================================================
+7. FOR ZETA VISUALISER MODE OVERHAUL
+================================================================================
+
+How to adapt for Zeta:
+
+----- NEW AGENT NAMES -----
+• DAVID → Still David (analyzes query, does RAG)
+• SANDY → Still Sandy (formats visualizations) or new name
+
+----- ZETA SPECIFIC STAGES -----
+David (RAG + Graph):
+  "analyzing" → "searching" → "graphing" → "complete"
+
+Sandy (Visualization):
+  "processing" → "building" → "rendering" → "complete"
+
+----- NEW CARD TYPES FOR ZETA -----
+• Decision cards (from Neo4j)
+• Source cards (chroma + integrations)
+• Chart cards (visualizations)
+• KPI cards (metrics)
+
+Example Zeta Sandy response:
+```json
+{
+  "content": "Here's your decision analysis...",
+  "dataCards": [
+    { "type": "chart", "data": {...} },
+    { "type": "kpi", "label": "Decisions", "value": 47 },
+    { "type": "source", "id": "slack", "count": 234 }
+  ],
+  "queryContext": {
+    "detected": ["tech-decisions", "payments"],
+    "confidence": 92,
+    "sources": ["chroma", "neo4j"]
+  }
+}
+```
+
+----- INTEGRATION WITH CONNECTORS -----
+Zeta's @slack, @gmail, @drive, @meeting can be Sandy-specific tools:
+• Sandy routes to appropriate connector
+• Shows connector status during processing
+• Displays connector-specific data in cards
+
+
+================================================================================
+8. ANIMATION SPECIFICATIONS
+================================================================================
+
+----- FOCUS TRANSITION -----
+Duration: 600ms
+Easing: cubic-bezier(0.4, 0, 0.2, 1)
+Effect: opacity + transform + box-shadow
+
+Code:
+```css
+.focus-transfer {
+  transition: all 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+```
+
+----- STATE CHANGE INDICATORS -----
+• Idle → Active: fade-in + scale(1.05) + glow
+• Active → Complete: pulse once + color shift to green
+• Complete → Inactive: fade-out + scale(0.95)
+
+
+================================================================================
+9. ERROR HANDLING STATES
+================================================================================
+
+Each stage can have error state:
+• "analyzing" → "error" (red border, shake animation)
+• Message: "Failed to analyze query"
+
+Sandy graceful error presentation:
+• Friendly error message
+• Suggestions for retry
+• "Contact support" option
+
+
+================================================================================
+10. SUMMARY: KEY PRINCIPLES
+================================================================================
+
+1. TWO-AGENT PIPELINE
+   - Clear separation of concerns
+   - Analysis (David) → Presentation (Sandy)
+
+2. FOCUS PASSING UI
+   - Only one active agent at a time
+   - Visual attention transfer
+   - Glow + pulse animation
+
+3. LINEAR PROGRESS
+   - Each agent has 4 stages
+   - Progress bar per agent
+   - Percentage completion
+
+4. CARD-BASED RESPONSE
+   - Not just text
+   - Structured data cards
+   - Scores + metadata
+
+5. TOOL CALL VISIBILITY
+   - Backend pipeline shown
+   - Status per step
+   - Duration tracking
+
+6. REAL-TIME UPDATES
+   - Stage messages update live
+   - Progress bar animates
+   - Smooth transitions
+
+7. GRACEFUL ERROR HANDLING
+   - Per-stage errors
+   - Sandy presents friendly errors
+
+================================================================================
+                              END OF DOCUMENT
+================================================================================
