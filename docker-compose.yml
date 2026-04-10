@@ -1,11 +1,3 @@
-# `docker compose up --build`
-#
-# Stack: Postgres, Redis (Slack queue), API (Node only — PDFs use pdf-parse / PDF.js text layer).
-#
-# Create backend/.env from backend/.env.example. For local Postgres in Compose:
-#   DB_URL=postgresql://zeta:zeta@postgres:5432/zeta?sslmode=disable
-#   REDIS_URL=redis://redis:6379
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -25,18 +17,14 @@ services:
     image: redis:7-alpine
 
   api:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: ./backend
     ports:
       - '3000:3000'
     env_file:
       - ./backend/.env
     environment:
-      PORT: '3000'
-      NODE_ENV: production
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       REDIS_URL: redis://redis:6379
+      PORT: '3000'
     depends_on:
       postgres:
         condition: service_healthy
