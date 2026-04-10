@@ -160,8 +160,9 @@ const TranscriptionBlock: React.FC = () => {
 
     // Auto-demo: Random, ambient interactions - stops on user interaction
     useEffect(() => {
+        const autoDemoState = autoDemoRef.current;
         // Initialize state
-        autoDemoRef.current.isRunning = true;
+        autoDemoState.isRunning = true;
         let timeoutId: NodeJS.Timeout | null = null;
 
         // Action definitions with metadata
@@ -227,7 +228,7 @@ const TranscriptionBlock: React.FC = () => {
 
         const executeRandomAction = (): void => {
             // Early return if not running
-            if (!autoDemoRef.current.isRunning) {
+            if (!autoDemoState.isRunning) {
                 return;
             }
 
@@ -248,12 +249,12 @@ const TranscriptionBlock: React.FC = () => {
             }, selectedAction.delay);
 
             // Update ref with current timeout for cleanup
-            autoDemoRef.current.timeoutId = timeoutId;
+            autoDemoState.timeoutId = timeoutId;
         };
 
         // Stop auto-demo function
         const stopAutoDemo = (): void => {
-            autoDemoRef.current.isRunning = false;
+            autoDemoState.isRunning = false;
 
             // Clear any pending timeout
             if (timeoutId) {
@@ -261,9 +262,9 @@ const TranscriptionBlock: React.FC = () => {
                 timeoutId = null;
             }
 
-            if (autoDemoRef.current.timeoutId) {
-                clearTimeout(autoDemoRef.current.timeoutId);
-                delete autoDemoRef.current.timeoutId;
+            if (autoDemoState.timeoutId) {
+                clearTimeout(autoDemoState.timeoutId);
+                delete autoDemoState.timeoutId;
             }
         };
 
@@ -279,17 +280,17 @@ const TranscriptionBlock: React.FC = () => {
 
         // Start auto-demo after initial delay
         timeoutId = setTimeout(() => {
-            if (autoDemoRef.current.isRunning) {
+            if (autoDemoState.isRunning) {
                 executeRandomAction();
             }
         }, 2500);
 
-        autoDemoRef.current.timeoutId = timeoutId;
+        autoDemoState.timeoutId = timeoutId;
 
         // Cleanup function
         return (): void => {
             // Stop execution
-            autoDemoRef.current.isRunning = false;
+            autoDemoState.isRunning = false;
 
             // Clear timeouts
             if (timeoutId) {
@@ -297,9 +298,9 @@ const TranscriptionBlock: React.FC = () => {
                 timeoutId = null;
             }
 
-            if (autoDemoRef.current.timeoutId) {
-                clearTimeout(autoDemoRef.current.timeoutId);
-                delete autoDemoRef.current.timeoutId;
+            if (autoDemoState.timeoutId) {
+                clearTimeout(autoDemoState.timeoutId);
+                delete autoDemoState.timeoutId;
             }
 
             // Remove event listeners

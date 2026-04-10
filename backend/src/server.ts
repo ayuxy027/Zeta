@@ -8,6 +8,15 @@ const { auth, requiresAuth } = oidc;
 
 const port = Number(process.env.PORT ?? 3001);
 const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+const { auth, requiresAuth } = oidc;
+
+const getRequiredEnv = (name: string): string => {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+};
 
 const getRequiredEnv = (name: string): string => {
   const value = process.env[name]?.trim();
@@ -39,6 +48,7 @@ app.use(
     clientID: getRequiredEnv('AUTH0_CLIENT_ID'),
     clientSecret: getRequiredEnv('AUTH0_CLIENT_SECRET'),
     secret: getRequiredEnv('AUTH0_SECRET'),
+    // Must match Auth0 Application → Advanced → OAuth → JWT Signature Algorithm (RS256 vs HS256).
     idTokenSigningAlg: process.env.AUTH0_ID_TOKEN_SIGNING_ALG?.trim() || 'RS256',
     authorizationParams: {
       response_type: 'code',
