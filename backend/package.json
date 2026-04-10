@@ -13,7 +13,8 @@
     "prisma:migrate": "prisma migrate dev",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed:farship": "tsx prisma/seed-farship.ts"
   },
   "dependencies": {
     "@prisma/client": "6.14.0",
