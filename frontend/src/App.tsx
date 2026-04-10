@@ -2,7 +2,6 @@ import React, { useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./components/common/Navbar";
 import LandingPage from "./pages/LandingPage";
-import ChangelogPage from "./pages/ChangelogPage";
 import DashboardPage from "./pages/DashboardPage";
 import ChatPage from "./pages/ChatPage";
 import ConnectorsPage from "./pages/ConnectorsPage";
@@ -28,7 +27,6 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/changelog" element={<ChangelogPage />} />
         <Route
           path="/dashboard"
           element={

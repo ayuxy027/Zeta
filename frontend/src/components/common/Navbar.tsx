@@ -7,6 +7,7 @@ const Navbar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const { user, isAuthenticated, isLoading, login, logout } = useAuth();
 
   const navItems = [
@@ -14,7 +15,6 @@ const Navbar: React.FC = () => {
     { path: "/dashboard/chat", label: "Chat" },
     { path: "/dashboard/recall", label: "Recall" },
     { path: "/connectors", label: "Connectors" },
-    { path: "/changelog", label: "Changelog" },
   ];
 
   const toggleMenu = () => setIsMenuOpen((value) => !value);
@@ -61,18 +61,26 @@ const Navbar: React.FC = () => {
             Loading...
           </span>
         ) : isAuthenticated ? (
-          <div className="md:hidden flex flex-col items-center gap-3">
-            <span className="text-sm text-vintage-gray-700">
-              {user?.name ?? user?.email ?? "Signed in"}
-            </span>
+          <div className="md:hidden flex flex-col items-center gap-3 mt-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
+                {(user?.name || user?.email || "U")[0].toUpperCase()}
+              </div>
+              <span className="text-sm font-medium text-gray-700">
+                {user?.name ?? user?.email ?? "Signed in"}
+              </span>
+            </div>
             <button
-              className="bg-vintage-black text-white px-5 py-2 rounded-full text-sm font-medium hover:opacity-90 transition"
+              className="w-full max-w-[200px] border border-red-100 bg-red-50 text-red-600 px-5 py-2 rounded-full text-sm font-medium hover:bg-red-100 transition flex justify-center items-center gap-2"
               onClick={() => {
                 closeMenu();
                 logout("/");
               }}
             >
-              Logout
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sign out
             </button>
           </div>
         ) : (
@@ -111,16 +119,50 @@ const Navbar: React.FC = () => {
             Loading...
           </span>
         ) : isAuthenticated ? (
-          <div className="hidden md:flex items-center space-x-3">
-            <span className="text-sm text-vintage-gray-700">
-              {user?.name ?? user?.email ?? "Signed in"}
-            </span>
-            <button
-              className="bg-vintage-black text-white px-5 py-2 rounded-full text-sm font-medium hover:opacity-90 transition"
-              onClick={() => logout("/")}
+          <div className="hidden md:relative md:flex items-center">
+            <button 
+              onClick={() => setIsProfileOpen(!isProfileOpen)}
+              className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
             >
-              Logout
+              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
+                {(user?.name || user?.email || "U")[0].toUpperCase()}
+              </div>
+              <span className="text-sm font-medium text-gray-700 max-w-[120px] truncate">
+                {user?.name ?? user?.email ?? "Signed in"}
+              </span>
+              <svg className={`w-4 h-4 text-gray-500 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
+
+            {isProfileOpen && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg shadow-black/5 border border-gray-100 py-1 overflow-hidden z-[60]">
+                {user && (
+                  <div className="px-4 py-3 border-b border-gray-50 mb-1">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {user.name || "User"}
+                    </p>
+                    {user.email && (
+                      <p className="text-xs text-gray-500 truncate mt-0.5">
+                        {user.email}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    logout("/");
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2 font-medium"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <button

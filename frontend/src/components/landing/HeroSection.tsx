@@ -147,31 +147,31 @@ const HeroSection: React.FC = () => {
 
                     {/* Left avatars */}
                     <div className="flex absolute left-0 top-1/2 z-[2] flex-col gap-8 -translate-y-1/2">
-                        <div className="overflow-hidden w-28 h-28 rounded-full ring-4 ring-white shadow-xl -rotate-6 sm:w-32 sm:h-32">
-                            <img src="/assets/image_01.png" alt="Team member 1" className="object-cover object-center w-full h-full" />
+                        <div className="overflow-hidden w-16 h-16 rounded-full ring-4 ring-white shadow-xl -rotate-6 -translate-y-8 sm:-translate-y-12 sm:w-20 sm:h-20 bg-white flex items-center justify-center p-3">
+                            <img src="/assets/icons/slack-svgrepo-com.svg" alt="Slack integration" className="object-contain w-full h-full drop-shadow-sm" />
                         </div>
 
-                        <div className="overflow-hidden ml-8 w-20 h-20 rounded-full ring-4 ring-white shadow-xl rotate-3 sm:w-24 sm:h-24">
-                            <img src="/assets/image_02.png" alt="Team member 2" className="object-cover object-center w-full h-full" />
+                        <div className="overflow-hidden ml-8 w-14 h-14 rounded-full ring-4 ring-white shadow-xl rotate-3 -translate-y-4 sm:-translate-y-6 sm:w-16 sm:h-16 bg-white flex items-center justify-center p-3">
+                            <img src="/assets/icons/google-meet-svgrepo-com.svg" alt="Google Meet integration" className="object-contain w-full h-full drop-shadow-sm" />
                         </div>
 
-                        <div className="overflow-hidden ml-4 w-24 h-24 rounded-full ring-4 ring-white shadow-xl sm:w-28 sm:h-28 -rotate-4">
-                            <img src="/assets/image_03.png" alt="Team member 3" className="object-cover object-center w-full h-full" />
+                        <div className="overflow-hidden ml-4 w-12 h-12 rounded-full ring-4 ring-white shadow-xl -rotate-4 translate-y-4 sm:translate-y-6 sm:w-14 sm:h-14 bg-white flex items-center justify-center p-2">
+                            <img src="/assets/icons/jira-svgrepo-com.svg" alt="Jira integration" className="object-contain w-full h-full drop-shadow-sm" />
                         </div>
                     </div>
 
                     {/* Right avatars */}
                     <div className="flex absolute right-0 top-1/2 z-[2] flex-col gap-8 -translate-y-1/2">
-                        <div className="overflow-hidden w-28 h-28 rounded-full ring-4 ring-white shadow-xl rotate-6 sm:w-32 sm:h-32">
-                            <img src="/assets/image_04.png" alt="Team member 4" className="object-cover object-center w-full h-full" />
+                        <div className="overflow-hidden w-16 h-16 rounded-full ring-4 ring-white shadow-xl rotate-6 -translate-y-8 sm:-translate-y-12 sm:w-20 sm:h-20 bg-white flex items-center justify-center p-3">
+                            <img src="/assets/icons/gmail-svgrepo-com.svg" alt="Gmail integration" className="object-contain w-full h-full drop-shadow-sm" />
                         </div>
 
-                        <div className="overflow-hidden mr-6 w-20 h-20 rounded-full ring-4 ring-white shadow-xl -rotate-3 sm:w-24 sm:h-24">
-                            <img src="/assets/image_05.png" alt="Team member 5" className="object-cover object-center w-full h-full" />
+                        <div className="overflow-hidden mr-6 w-14 h-14 rounded-full ring-4 ring-white shadow-xl -rotate-3 -translate-y-4 sm:-translate-y-6 sm:w-16 sm:h-16 bg-white flex items-center justify-center p-3">
+                            <img src="/assets/icons/drive-color-svgrepo-com.svg" alt="Google Drive integration" className="object-contain w-full h-full drop-shadow-sm" />
                         </div>
 
-                        <div className="overflow-hidden mr-10 w-24 h-24 rounded-full ring-4 ring-white shadow-xl sm:w-28 sm:h-28 rotate-4">
-                            <img src="/assets/image_06.png" alt="Team member 6" className="object-cover object-center w-full h-full" />
+                        <div className="overflow-hidden mr-10 w-12 h-12 rounded-full ring-4 ring-white shadow-xl sm:w-14 sm:h-14 rotate-4 bg-white flex items-center justify-center p-2">
+                            <img src="/assets/icons/salesforce-2-logo-svgrepo-com.svg" alt="Salesforce integration" className="object-contain w-full h-full drop-shadow-sm" />
                         </div>
                     </div>
 
