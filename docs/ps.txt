@@ -1,0 +1,92 @@
+================================================================================
+ORGANIZATIONAL MEMORY & REASONING ENGINE
+Hackathon problem statement (enhanced)
+================================================================================
+
+ONE-LINE GOAL
+-------------
+Build a system that remembers how your company *thinks*—not only what it
+decided—and answers natural-language questions with answers you can audit back
+to real sources (email, chat, docs, meetings).
+
+
+CORE CHALLENGE
+--------------
+Organizations scatter context across tools. Decisions look like outcomes in
+tickets or slides, while the *reasoning* (tradeoffs, constraints, who argued
+what) lives in threads, inboxes, and transcripts. The challenge is to passively
+collect that material, preserve rationale alongside facts, and expose it
+through trustworthy Q&A.
+
+
+WHAT TO BUILD
+-------------
+1. MULTI-AGENT AI SYSTEM
+   Use more than one distinct role or step in the pipeline (e.g. ingest,
+   retrieve, synthesize; or planner + tool-using agents). The architecture
+   should be decomposable—not a single opaque model call for everything.
+
+2. PASSIVE COLLECTION FROM COMPANY TOOLS
+   Ingestion should feel ongoing and tool-driven, not “paste text to chat each
+   time.” Target channels include:
+   • Emails
+   • Chats (e.g. team messaging)
+   • Documents (wikis, files, knowledge bases)
+   • Meetings (transcripts, recordings metadata, or calendar-linked artifacts)
+
+3. REASONING, NOT ONLY OUTCOMES
+   Store and reason about *why* something was chosen or what would break if
+   something changed—not merely logging final decisions. “What was decided?”
+   and “Why was it decided?” should both be first-class.
+
+4. PLAIN-ENGLISH Q&A WITH PROVENANCE
+   Anyone in the org (or demo audience) can ask questions in natural language.
+   Answers must show *where* the information came from: which message, thread,
+   doc section, or meeting segment supports each claim—not uncited model prose.
+
+
+EXAMPLE QUESTIONS (ILLUSTRATIVE)
+--------------------------------
+• “Why did we choose this vendor?”
+• “What breaks if we change this feature?”
+• “Who pushed back on the timeline and what was their concern?”
+• “What did we agree about the API contract last quarter?”
+
+
+NAMED INTEGRATIONS / STACK (REFERENCE)
+--------------------------------------
+These appear in the brief as the expected building blocks. Implementations may
+compose them flexibly; substitutions should be justified in documentation.
+
+  Slack       — Chat / workspace events as a source of organizational signal.
+  Gmail       — Email as a source of decisions, threads, and follow-ups.
+  LangChain   — Orchestration, agents, tools, and retrieval-augmented flows.
+  Neo4j       — Graph relationships (people, decisions, features, dependencies).
+  ChromaDB    — Vector memory for semantic search over chunked content.
+
+
+ORIGINAL DESCRIPTION (VERBATIM INTENT)
+--------------------------------------
+Build a multi-agent AI system that passively collects information from company
+tools (emails, chats, documents, meetings), understands and stores the
+reasoning behind decisions — not just what was decided — and lets anyone ask
+plain English questions like "Why did we choose this vendor?" or "What breaks
+if we change this feature?" with answers that show exactly where the
+information came from.
+
+
+SUCCESS LOOKS LIKE
+------------------
+• Two or more real channels feeding a shared memory or retrieval layer.
+• At least one path where “why” is represented distinctly from “what.”
+• A demo query whose answer cites concrete sources (ids, links, or excerpts
+  tied to origin).
+• A credible multi-agent story visible in code or architecture.
+
+
+PROJECT NOTES (THIS REPO)
+-------------------------
+For an expanded “ideal state vs bare minimum” checklist used alongside this PS,
+see: docs/baseline.md
+
+================================================================================
