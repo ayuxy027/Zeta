@@ -11,19 +11,14 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.27.0",
-    "@slack/bolt": "^3.17.1",
-    "@slack/web-api": "^7.5.0",
+    "@opendataloader/pdf": "^2.2.0",
     "bullmq": "^5.12.0",
-    "chromadb": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-openid-connect": "^2.19.3",
     "googleapis": "^171.4.0",
-    "ioredis": "^5.4.1",
     "mammoth": "^1.12.0",
-    "neo4j-driver": "^5.23.0",
     "pdf-parse": "^2.4.5",
     "pg": "^8.20.0",
     "word-extractor": "^1.0.4"

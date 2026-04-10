@@ -180,7 +180,7 @@ const DriveIngestPage: React.FC = () => {
             </h1>
             <p className="text-vintage-gray-600 mt-2 max-w-2xl">
               Connect Google Drive, choose PDFs, Word docs, Google Docs, or plain text files, then save a named extraction for your
-              downstream pipelines. Text is extracted locally; scanned PDFs may need a dedicated OCR pass if little text is found.
+              downstream pipelines. PDFs: built-in text first, then OpenDataLoader (Java) when content looks thin; for scanned PDFs use the hybrid OCR server and OPENDATALOADER_HYBRID_URL (see ocr.txt in the repo).
             </p>
           </div>
         </div>
