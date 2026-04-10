@@ -188,13 +188,33 @@ const StepRow: React.FC<StepRowProps> = ({ step, accent }) => {
   );
 };
 
-// ── Module-level cache — survives React navigation (component unmount/remount) ─
-// Keyed by connection identity (email / teamId). Cleared on disconnect.
-const pipelineCache = new Map<string, { steps: SyncStep[]; done: boolean }>();
+// ── localStorage-backed pipeline cache — survives hard refresh ─────────────
+const PIPELINE_LS_KEY = 'zeta_sync_pipeline';
+const STATUS_LS_KEY   = 'zeta_connector_status';
 
-// Status cache — prevents reload flicker & animation restart on tab switch
-let cachedGoogleStatus: GoogleWorkspaceStatus | null = null;
-let cachedSlackStatus: SlackStatus | null = null;
+type CacheEntry = { steps: SyncStep[]; done: boolean };
+
+const pipelineCache = {
+  _m: new Map<string, CacheEntry>(
+    (() => { try { const r = localStorage.getItem(PIPELINE_LS_KEY); return r ? Object.entries(JSON.parse(r)) as [string, CacheEntry][] : []; } catch { return []; } })(),
+  ),
+  get(k: string) { return this._m.get(k); },
+  set(k: string, v: CacheEntry) { this._m.set(k, v); this._flush(); },
+  delete(k: string) { this._m.delete(k); this._flush(); },
+  _flush() { try { localStorage.setItem(PIPELINE_LS_KEY, JSON.stringify(Object.fromEntries(this._m))); } catch { /* quota */ } },
+};
+
+// Status cache — prevents loading flicker & animation restart on navigation + hard refresh
+function _readStatusCache(): { google: GoogleWorkspaceStatus | null; slack: SlackStatus | null } {
+  try { const r = localStorage.getItem(STATUS_LS_KEY); return r ? JSON.parse(r) : { google: null, slack: null }; }
+  catch { return { google: null, slack: null }; }
+}
+function _writeStatusCache(google: GoogleWorkspaceStatus | null, slack: SlackStatus | null) {
+  try { localStorage.setItem(STATUS_LS_KEY, JSON.stringify({ google, slack })); } catch { /* */ }
+}
+const _initStatus = _readStatusCache();
+let cachedGoogleStatus: GoogleWorkspaceStatus | null = _initStatus.google;
+let cachedSlackStatus: SlackStatus | null = _initStatus.slack;
 
 // ── Pipeline phase ─────────────────────────────────────────────────────────
 interface Phase {
@@ -238,11 +258,11 @@ function useSyncPipeline(labels: string[], active: boolean, cacheKey: string): S
   const phaseRef = useRef<Phase>(makePhase(0));
   const rafRef   = useRef<number | null>(null);
 
-  // Write to cache after every steps change
+  // Write to cache after every steps change (only when active — prevents blank steps overwriting done state)
   useEffect(() => {
-    if (!cacheKey) return;
+    if (!cacheKey || !active) return;
     pipelineCache.set(cacheKey, { steps, done: steps.every((s) => s.state === 'done') });
-  }, [steps, cacheKey]);
+  }, [steps, cacheKey, active]);
 
   useEffect(() => {
     if (!active) {
@@ -368,8 +388,8 @@ const ConnectorsPage: React.FC = () => {
     try {
       const s = await fetchGoogleWorkspaceStatus();
       cachedGoogleStatus = s;
+      _writeStatusCache(cachedGoogleStatus, cachedSlackStatus);
       setGoogleStatus(s);
-      // If previously connected but now disconnected, clear pipeline cache
       if (!s.connected) pipelineCache.delete('google');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load Google Workspace status.');
@@ -383,6 +403,7 @@ const ConnectorsPage: React.FC = () => {
     try {
       const s = await fetchSlackStatus();
       cachedSlackStatus = s;
+      _writeStatusCache(cachedGoogleStatus, cachedSlackStatus);
       setSlackStatus(s);
       if (!s.connected) pipelineCache.delete('slack');
     } catch (e) {
@@ -433,6 +454,7 @@ const ConnectorsPage: React.FC = () => {
       await disconnectGoogleWorkspace();
       const s: GoogleWorkspaceStatus = { connected: false, email: null, scopes: null, connectedAt: null };
       cachedGoogleStatus = s;
+      _writeStatusCache(cachedGoogleStatus, cachedSlackStatus);
       setGoogleStatus(s);
       setBanner({ type: 'success', message: 'Google Workspace disconnected.' });
     } catch (e) {
@@ -452,6 +474,7 @@ const ConnectorsPage: React.FC = () => {
       await disconnectSlack();
       const s: SlackStatus = { connected: false, teamId: null, teamName: null, scopes: null, connectedAt: null };
       cachedSlackStatus = s;
+      _writeStatusCache(cachedGoogleStatus, cachedSlackStatus);
       setSlackStatus(s);
       setBanner({ type: 'success', message: 'Slack disconnected.' });
     } catch (e) {
