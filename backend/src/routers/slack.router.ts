@@ -3,8 +3,70 @@ import { createHmac } from 'crypto';
 import { config } from '../config.js';
 import { slackQueue, type SlackJobData } from '../queue/slack.queue.js';
 import type { SlackEvent } from '../types/slack.types.js';
+import { prisma } from '../lib/prisma.js';
+import { runPipeline } from '../pipeline/pipeline.js';
+import type { PipelinePayload } from '../pipeline/types.js';
 
 const router = Router();
+
+async function processSlackEventInline(data: SlackJobData): Promise<void> {
+  const e = data.event as Record<string, unknown>;
+  const text = (e['text'] as string) ?? '';
+  const channel = (e['channel'] as string) ?? '';
+  const user = (e['user'] as string) ?? '';
+  const ts = (e['ts'] as string) ?? '';
+  const threadTs = (e['thread_ts'] as string | undefined) ?? undefined;
+
+  if (!text.trim()) return;
+
+  if (data.team_id) {
+    try {
+      const cred = await prisma.integrationCredential.findFirst({
+        where: { provider: 'slack', providerTeamId: data.team_id, isActive: true },
+        select: { userId: true },
+      });
+      if (cred?.userId) {
+        await prisma.slackMessage.upsert({
+          where: { eventId: data.event_id },
+          update: {},
+          create: {
+            userId: cred.userId,
+            eventId: data.event_id,
+            teamId: data.team_id,
+            channelId: channel,
+            slackUserId: user,
+            text,
+            ts,
+            threadTs,
+            rawPayload: e as object,
+          },
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[slack-inline] DB persist failed for ${data.event_id}:`, message);
+    }
+  }
+
+  const timestamp = Number.parseFloat(ts);
+  const payload: PipelinePayload = {
+    source_id: `slack_${channel}_${ts}`,
+    source_type: 'slack',
+    raw_text: text,
+    metadata: {
+      author: user,
+      timestamp: Number.isFinite(timestamp)
+        ? new Date(timestamp * 1000).toISOString()
+        : new Date().toISOString(),
+      channel,
+    },
+  };
+
+  const result = await runPipeline(payload);
+  if (result.error) {
+    console.warn(`[slack-inline] Partial pipeline error for ${data.event_id}: ${result.error}`);
+  }
+}
 
 // Verify Slack signature against the raw request body (not re-serialized JSON)
 function verifySlackSignature(timestamp: string, signature: string, rawBody: string): boolean {
@@ -61,11 +123,30 @@ router.post('/events', async (req: Request, res: Response) => {
         event: body.event,
         timestamp: Date.now(),
       };
-      
-      await slackQueue.add('slack-event', jobData);
-      console.log(`Slack event ${body.event_id} queued for processing`);
+
+      try {
+        await slackQueue.add('slack-event', jobData);
+        console.log(`Slack event ${body.event_id} queued for processing`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[slack] Queue unavailable, processing inline for ${body.event_id}:`, message);
+        void processSlackEventInline(jobData).catch((inlineErr) => {
+          const inlineMessage = inlineErr instanceof Error ? inlineErr.message : String(inlineErr);
+          console.error(`[slack-inline] Event ${body.event_id} failed:`, inlineMessage);
+        });
+      }
     } else {
-      console.warn(`Slack event ${body.event_id} received but queue not available - skipping`);
+      const jobData: SlackJobData = {
+        event_id: body.event_id,
+        team_id: body.team_id,
+        event: body.event,
+        timestamp: Date.now(),
+      };
+      void processSlackEventInline(jobData).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[slack-inline] Event ${body.event_id} failed:`, message);
+      });
+      console.warn(`Slack event ${body.event_id} processed inline (queue unavailable)`);
     }
     
     // Return immediately (must be < 3 seconds)

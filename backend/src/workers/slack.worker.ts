@@ -21,7 +21,7 @@ function redisConnectionFromUrl(url: string) {
 
 export function startSlackWorker() {
   const isRedisEnabled =
-    process.env.REDIS_ENABLED === "true" || config.nodeEnv === "production";
+    process.env.REDIS_ENABLED !== "false";
 
   if (!isRedisEnabled) {
     console.log(

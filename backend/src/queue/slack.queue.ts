@@ -22,7 +22,7 @@ function redisConnectionFromUrl(url: string): {
 
 let slackQueue: Queue | null = null;
 const isRedisEnabled =
-  process.env.REDIS_ENABLED === "true" || config.nodeEnv === "production";
+  process.env.REDIS_ENABLED !== "false";
 
 if (isRedisEnabled) {
   try {

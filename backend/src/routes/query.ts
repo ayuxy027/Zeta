@@ -5,6 +5,25 @@ import { runPipeline } from "../pipeline/pipeline.js";
 import type { PipelinePayload } from "../pipeline/types.js";
 import { prisma } from "../lib/prisma.js";
 
+const WINDOW_MS = 60_000;
+const RATE_LIMIT_PER_WINDOW = 120;
+const ingestRouteHits = new Map<string, { count: number; windowStart: number }>();
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const current = ingestRouteHits.get(key);
+  if (!current || now - current.windowStart > WINDOW_MS) {
+    ingestRouteHits.set(key, { count: 1, windowStart: now });
+    return true;
+  }
+  if (current.count >= RATE_LIMIT_PER_WINDOW) {
+    return false;
+  }
+  current.count += 1;
+  ingestRouteHits.set(key, current);
+  return true;
+}
+
 export function createQueryRouter() {
   const router = express.Router();
 
@@ -37,6 +56,11 @@ export function createQueryRouter() {
   // Direct ingest endpoint — feed any source into the pipeline
   router.post("/ingest", async (req: Request, res: Response) => {
     const body = req.body as Partial<PipelinePayload>;
+
+    if (!checkRateLimit(`ingest:${req.ip}`)) {
+      res.status(429).json({ error: "Too many ingest requests. Please retry in a minute." });
+      return;
+    }
 
     if (!body.source_id || !body.source_type || !body.raw_text || !body.metadata?.timestamp) {
       res.status(400).json({ error: "Required: source_id, source_type, raw_text, metadata.timestamp" });

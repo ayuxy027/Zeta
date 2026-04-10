@@ -1,6 +1,6 @@
 import { OAuth2Client } from "google-auth-library";
 import { google } from "googleapis";
-import { decryptToken } from "../lib/tokenCrypto.js";
+import { decryptToken, encryptToken } from "../lib/tokenCrypto.js";
 import { getPool } from "../db/pool.js";
 
 export type GoogleIntegrationPurpose = "drive" | "mail";
@@ -54,6 +54,51 @@ export function createOAuth2Client(
   });
 }
 
+function connectionTableForPurpose(purpose: GoogleIntegrationPurpose): string {
+  return purpose === "drive"
+    ? "google_drive_connections"
+    : "google_mail_connections";
+}
+
+function attachRefreshTokenPersistence(
+  client: OAuth2Client,
+  userSub: string,
+  purpose: GoogleIntegrationPurpose,
+): void {
+  const pool = getPool();
+  if (!pool) return;
+
+  const table = connectionTableForPurpose(purpose);
+
+  client.on("tokens", (tokens) => {
+    if (!tokens.refresh_token) return;
+    const encrypted = encryptToken(tokens.refresh_token);
+    void pool
+      .query(
+        `UPDATE ${table}
+         SET refresh_token_encrypted = $1,
+             updated_at = NOW()
+         WHERE user_sub = $2`,
+        [encrypted, userSub],
+      )
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[google] Failed persisting rotated ${purpose} refresh token:`, message);
+      });
+  });
+}
+
+async function ensureAccessToken(client: OAuth2Client, purpose: GoogleIntegrationPurpose): Promise<boolean> {
+  try {
+    await client.getAccessToken();
+    return true;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[google] Could not refresh ${purpose} access token:`, message);
+    return false;
+  }
+}
+
 export async function getOAuth2ClientForUser(
   userSub: string,
 ): Promise<OAuth2Client | null> {
@@ -72,6 +117,9 @@ export async function getOAuth2ClientForUser(
   const refreshToken = decryptToken(row.refresh_token_encrypted);
   const client = createOAuth2Client("drive");
   client.setCredentials({ refresh_token: refreshToken });
+  attachRefreshTokenPersistence(client, userSub, "drive");
+  const isReady = await ensureAccessToken(client, "drive");
+  if (!isReady) return null;
   return client;
 }
 
@@ -93,6 +141,9 @@ export async function getOAuth2ClientForMailUser(
   const refreshToken = decryptToken(row.refresh_token_encrypted);
   const client = createOAuth2Client("mail");
   client.setCredentials({ refresh_token: refreshToken });
+  attachRefreshTokenPersistence(client, userSub, "mail");
+  const isReady = await ensureAccessToken(client, "mail");
+  if (!isReady) return null;
   return client;
 }
 

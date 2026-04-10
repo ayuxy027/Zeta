@@ -5,6 +5,26 @@ const COLLECTION_NAME = "zeta_knowledge";
 const EMBED_MODEL = "gemini-embedding-001";
 
 let client: ChromaClient | null = null;
+let collectionReady = false;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withRetry<T>(task: () => Promise<T>, attempts = 2, delayMs = 200): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      if (i < attempts - 1) {
+        await sleep(delayMs);
+      }
+    }
+  }
+  throw lastError;
+}
 
 function getClient(): ChromaClient {
   if (!client) {
@@ -47,10 +67,21 @@ const googleEmbeddingFn = {
 };
 
 async function getCollection() {
-  return getClient().getOrCreateCollection({
-    name: COLLECTION_NAME,
-    embeddingFunction: googleEmbeddingFn,
-  });
+  return withRetry(
+    async () =>
+      getClient().getOrCreateCollection({
+        name: COLLECTION_NAME,
+        embeddingFunction: googleEmbeddingFn,
+      }),
+    3,
+    300,
+  );
+}
+
+export async function ensureChromaCollection(): Promise<void> {
+  if (collectionReady) return;
+  await getCollection();
+  collectionReady = true;
 }
 
 export async function upsertChunk(payload: PipelinePayload): Promise<void> {
@@ -84,6 +115,7 @@ export async function queryChunks(
   query: string,
   nResults: number = 5,
 ): Promise<ChunkResult[]> {
+  await ensureChromaCollection();
   const collection = await getCollection();
 
   const results = await collection.query({

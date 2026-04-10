@@ -5,6 +5,7 @@ import oidc from "express-openid-connect";
 import slackRouter from "./routers/slack.router.js";
 import { initDb } from "./db/pool.js";
 import { initNeo4j } from "./services/neo4j.service.js";
+import { ensureChromaCollection } from "./services/chromadb.service.js";
 import { createDriveIngestRouter } from "./routes/driveIngest.js";
 import { createGmailRouter } from "./routes/gmail.js";
 import { createIntegrationsRouter } from "./routers/integrations.router.js";
@@ -266,6 +267,13 @@ app.use("/api/recall", createRecallRouter());
 async function start() {
   await initDb();
   await initNeo4j();
+  try {
+    await ensureChromaCollection();
+    console.log("[chroma] Collection is ready");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn("[chroma] Collection warmup failed; retrying lazily on query:", message);
+  }
   app.listen(port, () => {
     console.log(`Zeta backend listening on http://localhost:${port}`);
     startSlackWorker();

@@ -21,6 +21,9 @@ const { requiresAuth } = oidc;
 const MAX_FILES = 20;
 const MAX_DISPLAY_NAME_LENGTH = 200;
 const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
+const WINDOW_MS = 60_000;
+const RATE_LIMIT_PER_WINDOW = 30;
+const driveRouteHits = new Map<string, { count: number; windowStart: number }>();
 
 const DRIVE_FILE_FIELDS =
   "nextPageToken, files(id, name, mimeType, modifiedTime, size, shortcutDetails(targetId, targetMimeType))";
@@ -54,6 +57,21 @@ function requireGoogleEnv(_req: Request, res: Response, next: () => void) {
       e instanceof Error ? e.message : "Google OAuth is not configured.";
     res.status(503).json({ error: message });
   }
+}
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const current = driveRouteHits.get(key);
+  if (!current || now - current.windowStart > WINDOW_MS) {
+    driveRouteHits.set(key, { count: 1, windowStart: now });
+    return true;
+  }
+  if (current.count >= RATE_LIMIT_PER_WINDOW) {
+    return false;
+  }
+  current.count += 1;
+  driveRouteHits.set(key, current);
+  return true;
 }
 
 export function createDriveIngestRouter() {
@@ -204,6 +222,10 @@ export function createDriveIngestRouter() {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
+      if (!checkRateLimit(`drive_files:${userSub}`)) {
+        res.status(429).json({ error: "Too many Drive list requests. Please retry in a minute." });
+        return;
+      }
       const auth = await getOAuth2ClientForUser(userSub);
       if (!auth) {
         res.status(400).json({ error: "Google Drive is not connected." });
@@ -270,6 +292,10 @@ export function createDriveIngestRouter() {
       const userSub = req.oidc.user?.sub;
       if (!userSub) {
         res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (!checkRateLimit(`ingest_drive:${userSub}`)) {
+        res.status(429).json({ error: "Too many Drive ingest requests. Please retry in a minute." });
         return;
       }
       const body = req.body as { fileIds?: unknown; displayName?: unknown };
@@ -388,7 +414,16 @@ export function createDriveIngestRouter() {
           subject: displayName,
         },
       };
-      runPipeline(pipelinePayload).catch((err) =>
+      const runWithRetry = async () => {
+        try {
+          await runPipeline(pipelinePayload);
+        } catch (firstErr) {
+          const message = firstErr instanceof Error ? firstErr.message : String(firstErr);
+          console.warn("[drive] Pipeline first attempt failed, retrying:", message);
+          await runPipeline(pipelinePayload);
+        }
+      };
+      runWithRetry().catch((err) =>
         console.error("[drive] Pipeline error:", err),
       );
 

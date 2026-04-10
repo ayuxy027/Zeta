@@ -22,6 +22,9 @@ const { requiresAuth } = oidc;
 
 const MAX_LIST_RESULTS = 50;
 const METADATA_FETCH_CONCURRENCY = 10;
+const WINDOW_MS = 60_000;
+const RATE_LIMIT_PER_WINDOW = 60;
+const routeHits = new Map<string, { count: number; windowStart: number }>();
 
 function getFrontendUrl(): string {
   return process.env.FRONTEND_URL?.trim() ?? "http://localhost:5173";
@@ -90,6 +93,21 @@ function mapGmailError(e: unknown): { status: number; error: string; code?: stri
     return { status: 500, error: e.message };
   }
   return { status: 500, error: "Unknown error" };
+}
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const current = routeHits.get(key);
+  if (!current || now - current.windowStart > WINDOW_MS) {
+    routeHits.set(key, { count: 1, windowStart: now });
+    return true;
+  }
+  if (current.count >= RATE_LIMIT_PER_WINDOW) {
+    return false;
+  }
+  current.count += 1;
+  routeHits.set(key, current);
+  return true;
 }
 
 async function mapWithConcurrency<T, R>(
@@ -306,6 +324,10 @@ export function createGmailRouter() {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
+      if (!checkRateLimit(`mail_messages:${userSub}`)) {
+        res.status(429).json({ error: "Too many Gmail list requests. Please retry in a minute.", code: "gmail_rate_limit_local" });
+        return;
+      }
       const auth = await getOAuth2ClientForMailUser(userSub);
       if (!auth) {
         res.status(400).json({ error: "Gmail is not connected." });
@@ -340,6 +362,10 @@ export function createGmailRouter() {
       const userSub = req.oidc.user?.sub;
       if (!userSub) {
         res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (!checkRateLimit(`mail_message:${userSub}`)) {
+        res.status(429).json({ error: "Too many Gmail detail requests. Please retry in a minute.", code: "gmail_rate_limit_local" });
         return;
       }
       const auth = await getOAuth2ClientForMailUser(userSub);
@@ -490,7 +516,16 @@ export function createGmailRouter() {
               subject: subject ?? undefined,
             },
           };
-          runPipeline(pipelinePayload).catch((err) =>
+          const runWithRetry = async () => {
+            try {
+              await runPipeline(pipelinePayload);
+            } catch (firstErr) {
+              const message = firstErr instanceof Error ? firstErr.message : String(firstErr);
+              console.warn("[gmail] Pipeline first attempt failed, retrying:", message);
+              await runPipeline(pipelinePayload);
+            }
+          };
+          runWithRetry().catch((err) =>
             console.error("[gmail] Pipeline error:", err),
           );
         }
