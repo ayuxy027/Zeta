@@ -13,10 +13,7 @@ const Navbar: React.FC = () => {
     { path: "/dashboard", label: "Dashboard" },
     { path: "/dashboard/chat", label: "Chat" },
     { path: "/connectors", label: "Connectors" },
-    { path: "/pricing", label: "Pricing" },
-    { path: "/about", label: "About" },
     { path: "/changelog", label: "Changelog" },
-    { path: "/blog", label: "Blog" },
   ];
 
   const toggleMenu = () => setIsMenuOpen((value) => !value);
