@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { authConfig } from '../auth/config';
+import KnowledgeGraphPanel, { type GraphData } from '../components/common/KnowledgeGraphPanel';
 
 type ConnectorKey = 'gmail' | 'slack' | 'drive' | 'meeting';
 
@@ -320,6 +321,8 @@ const ChatPage: React.FC = () => {
     mode?: 'live' | 'continuity';
   } | null>(null);
   const [visualLoading, setVisualLoading] = React.useState(false);
+  const [contextGraph, setContextGraph] = React.useState<GraphData | null>(null);
+  const [contextGraphLoading, setContextGraphLoading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [uploadProgress, setUploadProgress] = React.useState(0);
 
@@ -643,6 +646,9 @@ const ChatPage: React.FC = () => {
       );
       const overallResponseText = formatMainResponse(candidateDetailed ?? sandyOnlyConcise);
 
+      // All retrieved source IDs go to the graph (full proof chain per PS)
+      const allSourceIds = (data.sources ?? []).map((s) => s.source_id);
+      // Source cards in the chat UI are capped at 3 for readability
       const sources: SourceRef[] = (data.sources ?? []).slice(0, 3).map((s) => ({
         id: s.source_id,
         system: SOURCE_TYPE_MAP[s.source_type] ?? 'Slack',
@@ -711,6 +717,22 @@ const ChatPage: React.FC = () => {
       const rendered = await revealAssistantMessage(assistantMessage, token, requestStartedAt);
       if (!rendered) return;
       setActiveAgentTab('sandy');
+
+      // Fetch contextual subgraph for the Visualize tab (non-blocking)
+      if (allSourceIds.length > 0) {
+        const sourceIds = allSourceIds;
+        setContextGraphLoading(true);
+        fetch(`${authConfig.backendUrl}/api/graph/context`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ source_ids: sourceIds }),
+        })
+          .then((r) => r.json())
+          .then((gd) => { if (requestTokenRef.current === token) setContextGraph(gd as GraphData); })
+          .catch(() => { /* graph is best-effort */ })
+          .finally(() => { if (requestTokenRef.current === token) setContextGraphLoading(false); });
+      }
 
       setAgentFlow((prev) => ({
         ...prev,
@@ -818,34 +840,6 @@ const ChatPage: React.FC = () => {
     fileInputRef.current?.click();
   };
 
-  const buildContinuityVisual = () => {
-    const assistant = latestAssistant;
-    const decisions = (assistant?.davidDecisions ?? []).slice(0, 8).map((decision, index) => ({
-      decision: toReadableText(decision),
-      people: [],
-      topics: ['continuity'],
-      source: assistant?.sources?.[index]?.system?.toLowerCase() ?? 'mixed',
-      when: new Date().toISOString(),
-    }));
-    const distribution: Record<string, number> = {};
-    (assistant?.sources ?? []).forEach((s) => {
-      const key = s.system.toLowerCase();
-      distribution[key] = (distribution[key] ?? 0) + 1;
-    });
-
-    setVisualGraph({
-      counts: {
-        decisions: decisions.length,
-        people: 0,
-        topics: decisions.length ? 1 : 0,
-        sources: assistant?.sources?.length ?? 0,
-      },
-      decisions,
-      distribution,
-      error: 'Live graph fetch unavailable. Showing continuity snapshot from latest run.',
-      mode: 'continuity',
-    });
-  };
 
   const postJsonWithProgress = (
     url: string,
@@ -878,6 +872,34 @@ const ChatPage: React.FC = () => {
       xhr.send(JSON.stringify(body));
     });
 
+  const buildContinuityVisual = () => {
+    const assistant = latestAssistant;
+    const decisions = (assistant?.davidDecisions ?? []).slice(0, 8).map((decision, index) => ({
+      decision: toReadableText(decision),
+      people: [],
+      topics: ['continuity'],
+      source: assistant?.sources?.[index]?.system?.toLowerCase() ?? 'mixed',
+      when: new Date().toISOString(),
+    }));
+    const distribution: Record<string, number> = {};
+    (assistant?.sources ?? []).forEach((s) => {
+      const key = s.system.toLowerCase();
+      distribution[key] = (distribution[key] ?? 0) + 1;
+    });
+    setVisualGraph({
+      counts: {
+        decisions: decisions.length,
+        people: 0,
+        topics: decisions.length ? 1 : 0,
+        sources: assistant?.sources?.length ?? 0,
+      },
+      decisions,
+      distribution,
+      error: 'Live graph fetch unavailable. Showing continuity snapshot from latest run.',
+      mode: 'continuity',
+    });
+  };
+
   const loadVisualGraph = async () => {
     setVisualLoading(true);
     const maxAttempts = 2;
@@ -892,18 +914,13 @@ const ChatPage: React.FC = () => {
             signal: controller.signal,
           });
           window.clearTimeout(timeout);
-
           const data = await res.json() as {
             counts?: { decisions: number; people: number; topics: number; sources: number };
             decisions?: Array<{ decision: string; people: string[]; topics: string[]; source: string; when: string }>;
             distribution?: Record<string, number>;
             error?: string;
           };
-
-          if (!res.ok) {
-            throw new Error(data.error ?? 'Failed to load graph data.');
-          }
-
+          if (!res.ok) throw new Error(data.error ?? 'Failed to load graph data.');
           setVisualGraph({
             ...(data.counts ? { counts: data.counts } : {}),
             decisions: data.decisions ?? [],
@@ -1418,6 +1435,23 @@ const ChatPage: React.FC = () => {
                     </>
                   ) : (
                     <>
+                      {/* ── Force-directed graph ── */}
+                      {contextGraphLoading ? (
+                        <div className="flex items-center justify-center rounded-xl bg-[#1a1f2e] border border-gray-700 h-40">
+                          <div className="text-center">
+                            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                            <p className="text-xs text-gray-400">Building context graph…</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <KnowledgeGraphPanel
+                          externalData={contextGraph ?? undefined}
+                          compact
+                          title="Query Context Graph"
+                        />
+                      )}
+
+                      {/* ── Original graph snapshot cards ── */}
                       <article className="rounded-xl border border-sky-200 bg-sky-50/60 p-4">
                         <p className="text-xs uppercase tracking-wide font-semibold text-sky-700 flex items-center gap-1.5">
                           <GitBranch className="w-3.5 h-3.5" aria-hidden /> Graph snapshot

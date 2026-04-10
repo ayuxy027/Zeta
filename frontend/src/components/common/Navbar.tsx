@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronRight, Mic, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
+import { useSyncContext } from "../../context/SyncContext";
 
 const Navbar: React.FC = () => {
   const location = useLocation();
@@ -10,6 +11,7 @@ const Navbar: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
   const { user, isAuthenticated, isLoading, login, logout } = useAuth();
+  const { isAnySyncing } = useSyncContext();
   const isChatRoute = location.pathname === "/dashboard/chat";
 
   const navItems = [
@@ -76,6 +78,7 @@ const Navbar: React.FC = () => {
           <nav className="mt-4 grid gap-2">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
+              const showSyncDot = item.path === "/connectors" && isAnySyncing;
               return (
                 <button
                   key={item.path}
@@ -86,7 +89,15 @@ const Navbar: React.FC = () => {
                       : "bg-gray-50 text-vintage-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
                   }`}
                 >
-                  <span>{item.label}</span>
+                  <span className="flex items-center gap-2">
+                    {item.label}
+                    {showSyncDot && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
+                      </span>
+                    )}
+                  </span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
               );
@@ -147,6 +158,7 @@ const Navbar: React.FC = () => {
       >
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
+          const showSyncDot = item.path === "/connectors" && isAnySyncing;
           return (
             <button
               key={item.path}
@@ -154,9 +166,15 @@ const Navbar: React.FC = () => {
                 navigate(item.path);
                 closeMenu();
               }}
-              className={`hover:text-indigo-600 transition-colors ${isActive ? "text-indigo-600 font-medium" : ""}`}
+              className={`flex items-center gap-1.5 hover:text-indigo-600 transition-colors ${isActive ? "text-indigo-600 font-medium" : ""}`}
             >
               {item.label}
+              {showSyncDot && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
+                </span>
+              )}
             </button>
           );
         })}

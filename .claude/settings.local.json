@@ -49,7 +49,13 @@
       "Bash(taskkill:*)",
       "Bash(powershell:*)",
       "Bash(node -e \"const c = require\\('./node_modules/chromadb/dist/cjs/index.js'\\); console.log\\(Object.keys\\(c\\)\\)\")",
-      "Bash(cat D:/Coding/Zeta/backend/prisma/migrations/*/migration.sql)"
+      "Bash(cat D:/Coding/Zeta/backend/prisma/migrations/*/migration.sql)",
+      "Bash(wc -l /d/Coding/Zeta/frontend/src/pages/*.tsx /d/Coding/Zeta/backend/src/routes/*.ts /d/Coding/Zeta/backend/src/routers/*.ts)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"frontend exit: $?\")",
+      "Bash(echo \"backend exit: $?\")",
+      "Bash(bash:*)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

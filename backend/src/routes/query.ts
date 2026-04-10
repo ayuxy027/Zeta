@@ -237,6 +237,303 @@ export function createQueryRouter() {
     }
   });
 
+  // Node detail lookup — called when a user clicks a node in the force graph
+  router.post("/graph/node", async (req: Request, res: Response) => {
+    const nodeId: string = (req.body?.node_id as string) ?? "";
+    if (!nodeId) { res.status(400).json({ error: "node_id required" }); return; }
+
+    const uri      = process.env.NEO4J_URI      ?? "bolt://localhost:7687";
+    const user     = process.env.NEO4J_USER     ?? "neo4j";
+    const password = process.env.NEO4J_PASSWORD ?? "password";
+    const driver   = neo4j.driver(uri, neo4j.auth.basic(user, password));
+    const session  = driver.session();
+    const toNum    = (v: unknown) =>
+      typeof v === "object" && v !== null && "toNumber" in v
+        ? (v as { toNumber(): number }).toNumber()
+        : Number(v);
+
+    try {
+      if (nodeId.startsWith("dec_")) {
+        const key = nodeId.slice(4);
+        const r = await session.run(
+          `MATCH (d:Decision {key: $key})
+           OPTIONAL MATCH (p:Person)-[:MADE]->(d)
+           OPTIONAL MATCH (d)-[:ABOUT]->(t:Topic)
+           OPTIONAL MATCH (src)-[:SUPPORTS]->(d)
+           RETURN d.text AS text, d.first_seen AS when,
+                  collect(DISTINCT p.name)     AS people,
+                  collect(DISTINCT t.name)     AS topics,
+                  collect(DISTINCT labels(src)[0])[0] AS srcLabel,
+                  count(DISTINCT src)          AS srcCount`,
+          { key }
+        );
+        const rec = r.records[0];
+        const srcLabelMap: Record<string, string> = {
+          SlackMessage: "slack", Email: "gmail", Document: "drive", Meeting: "meeting",
+        };
+        res.json({
+          type: "Decision",
+          text: rec?.get("text") ?? "",
+          when: rec?.get("when") ?? null,
+          people: (rec?.get("people") as string[]) ?? [],
+          topics: (rec?.get("topics") as string[]) ?? [],
+          source: srcLabelMap[(rec?.get("srcLabel") as string) ?? ""] ?? "unknown",
+          sourceCount: rec ? toNum(rec.get("srcCount")) : 0,
+        });
+
+      } else if (nodeId.startsWith("per_")) {
+        const name = nodeId.slice(4);
+        const r = await session.run(
+          `MATCH (p:Person {name: $name})
+           OPTIONAL MATCH (p)-[:MADE]->(d:Decision)
+           OPTIONAL MATCH (src)-[:SUPPORTS]->(d)
+           RETURN p.name AS name,
+                  collect(DISTINCT d.text)[0..5] AS decisions,
+                  count(DISTINCT d)              AS decisionCount,
+                  collect(DISTINCT labels(src)[0])[0] AS topSrcLabel`,
+          { name }
+        );
+        const rec = r.records[0];
+        const srcLabelMap: Record<string, string> = {
+          SlackMessage: "slack", Email: "gmail", Document: "drive", Meeting: "meeting",
+        };
+        res.json({
+          type: "Person",
+          name: rec?.get("name") ?? name,
+          decisionCount: rec ? toNum(rec.get("decisionCount")) : 0,
+          recentDecisions: (rec?.get("decisions") as string[]) ?? [],
+          topSource: srcLabelMap[(rec?.get("topSrcLabel") as string) ?? ""] ?? "unknown",
+        });
+
+      } else if (nodeId.startsWith("top_")) {
+        const name = nodeId.slice(4);
+        const r = await session.run(
+          `MATCH (t:Topic {name: $name})
+           OPTIONAL MATCH (d:Decision)-[:ABOUT]->(t)
+           OPTIONAL MATCH (p:Person)-[:MADE]->(d)
+           RETURN t.name AS name,
+                  count(DISTINCT d)          AS decisionCount,
+                  collect(DISTINCT p.name)   AS people,
+                  collect(DISTINCT d.text)[0..4] AS sampleDecisions`,
+          { name }
+        );
+        const rec = r.records[0];
+        res.json({
+          type: "Topic",
+          name: rec?.get("name") ?? name,
+          decisionCount: rec ? toNum(rec.get("decisionCount")) : 0,
+          people: (rec?.get("people") as string[]) ?? [],
+          sampleDecisions: (rec?.get("sampleDecisions") as string[]) ?? [],
+        });
+
+      } else if (nodeId.startsWith("src_")) {
+        const srcId = nodeId.slice(4);
+        const r = await session.run(
+          `MATCH (s {source_id: $srcId})
+           OPTIONAL MATCH (s)-[:SUPPORTS]->(d:Decision)
+           RETURN labels(s)[0] AS label,
+                  s.author     AS author,
+                  s.channel    AS channel,
+                  s.subject    AS subject,
+                  s.raw_preview AS preview,
+                  s.timestamp  AS ts,
+                  count(d)     AS decisionCount`,
+          { srcId }
+        );
+        const rec = r.records[0];
+        const srcLabelMap: Record<string, string> = {
+          SlackMessage: "slack", Email: "gmail", Document: "drive", Meeting: "meeting",
+        };
+        res.json({
+          type: "Source",
+          sourceType: srcLabelMap[(rec?.get("label") as string) ?? ""] ?? "unknown",
+          author:  rec?.get("author")  ?? null,
+          channel: rec?.get("channel") ?? null,
+          subject: rec?.get("subject") ?? null,
+          preview: rec?.get("preview") ?? null,
+          timestamp: rec?.get("ts") ?? null,
+          decisionCount: rec ? toNum(rec.get("decisionCount")) : 0,
+        });
+
+      } else {
+        res.status(400).json({ error: "Unknown node_id prefix" });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Node detail fetch failed";
+      console.error("[graph/node] Error:", message);
+      res.status(500).json({ error: message });
+    } finally {
+      await session.close();
+      await driver.close();
+    }
+  });
+
+  // Contextual subgraph for a specific set of source_ids (used by chat Visualize tab)
+  router.post("/graph/context", async (req: Request, res: Response) => {
+    const sourceIds: string[] = Array.isArray(req.body?.source_ids) ? req.body.source_ids : [];
+    if (sourceIds.length === 0) {
+      res.json({ nodes: [], links: [] });
+      return;
+    }
+
+    const uri = process.env.NEO4J_URI ?? "bolt://localhost:7687";
+    const user = process.env.NEO4J_USER ?? "neo4j";
+    const password = process.env.NEO4J_PASSWORD ?? "password";
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
+    const session = driver.session();
+
+    try {
+      const result = await session.run(
+        `MATCH (src)-[:SUPPORTS]->(d:Decision)
+         WHERE src.source_id IN $sourceIds
+         OPTIONAL MATCH (p:Person)-[:MADE]->(d)
+         OPTIONAL MATCH (d)-[:ABOUT]->(t:Topic)
+         WITH src, d, p, t
+         RETURN
+           labels(src)[0]  AS srcLabel,
+           src.source_id   AS srcId,
+           src.author      AS srcAuthor,
+           src.channel     AS srcChannel,
+           src.subject     AS srcSubject,
+           d.key           AS dkey,
+           d.text          AS dtext,
+           p.name          AS pname,
+           t.name          AS tname`,
+        { sourceIds }
+      );
+
+      const nodes = new Map<string, { id: string; label: string; name: string; source?: string }>();
+      const linksSet = new Set<string>();
+      const links: { source: string; target: string; type: string }[] = [];
+
+      const srcLabelToType: Record<string, string> = {
+        SlackMessage: "slack", Email: "gmail", Document: "drive", Meeting: "meeting",
+      };
+
+      for (const rec of result.records) {
+        const srcLabel  = (rec.get("srcLabel")   as string | null) ?? "";
+        const srcId     = (rec.get("srcId")      as string | null) ?? "";
+        const srcAuthor = (rec.get("srcAuthor")  as string | null) ?? "";
+        const srcChannel = (rec.get("srcChannel") as string | null) ?? "";
+        const srcSubject = (rec.get("srcSubject") as string | null) ?? "";
+        const dkey      = (rec.get("dkey")       as string | null) ?? "";
+        const dtext     = (rec.get("dtext")      as string | null) ?? "";
+        const pname     = (rec.get("pname")      as string | null) ?? "";
+        const tname     = (rec.get("tname")      as string | null) ?? null;
+
+        const sourceType = srcLabelToType[srcLabel] ?? "unknown";
+        const srcName = srcSubject || srcChannel || srcAuthor || srcId.slice(0, 12);
+
+        if (srcId && !nodes.has(`src_${srcId}`))
+          nodes.set(`src_${srcId}`, { id: `src_${srcId}`, label: srcLabel || "Source", name: srcName, source: sourceType });
+
+        if (dkey && !nodes.has(`dec_${dkey}`))
+          nodes.set(`dec_${dkey}`, { id: `dec_${dkey}`, label: "Decision", name: dtext.length > 60 ? dtext.slice(0, 60) + "…" : dtext, source: sourceType });
+
+        if (pname && !nodes.has(`per_${pname}`))
+          nodes.set(`per_${pname}`, { id: `per_${pname}`, label: "Person", name: pname });
+
+        if (tname && !nodes.has(`top_${tname}`))
+          nodes.set(`top_${tname}`, { id: `top_${tname}`, label: "Topic", name: tname });
+
+        if (srcId && dkey) {
+          const lk = `src_${srcId}→dec_${dkey}`;
+          if (!linksSet.has(lk)) { linksSet.add(lk); links.push({ source: `src_${srcId}`, target: `dec_${dkey}`, type: "SUPPORTS" }); }
+        }
+        if (pname && dkey) {
+          const lk = `per_${pname}→dec_${dkey}`;
+          if (!linksSet.has(lk)) { linksSet.add(lk); links.push({ source: `per_${pname}`, target: `dec_${dkey}`, type: "MADE" }); }
+        }
+        if (dkey && tname) {
+          const lk = `dec_${dkey}→top_${tname}`;
+          if (!linksSet.has(lk)) { linksSet.add(lk); links.push({ source: `dec_${dkey}`, target: `top_${tname}`, type: "ABOUT" }); }
+        }
+      }
+
+      res.json({ nodes: [...nodes.values()], links });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Context graph failed";
+      console.error("[graph/context] Error:", message);
+      res.status(500).json({ error: message });
+    } finally {
+      await session.close();
+      await driver.close();
+    }
+  });
+
+  // Knowledge graph data for force-directed visualization
+  router.get("/graph", async (_req: Request, res: Response) => {
+    const uri = process.env.NEO4J_URI ?? "bolt://localhost:7687";
+    const user = process.env.NEO4J_USER ?? "neo4j";
+    const password = process.env.NEO4J_PASSWORD ?? "password";
+    const driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
+    const session = driver.session();
+
+    try {
+      // Fetch Person->Decision->Topic subgraph (capped for perf)
+      const result = await session.run(
+        `MATCH (p:Person)-[:MADE]->(d:Decision)
+         OPTIONAL MATCH (d)-[:ABOUT]->(t:Topic)
+         WITH p, d, t LIMIT 120
+         RETURN
+           p.name            AS pname,
+           d.key             AS dkey,
+           d.text            AS dtext,
+           d.source_type     AS dsource,
+           t.name            AS tname`
+      );
+
+      const nodes = new Map<string, { id: string; label: string; name: string; source?: string }>();
+      const linksSet = new Set<string>();
+      const links: { source: string; target: string; type: string }[] = [];
+
+      for (const rec of result.records) {
+        const pname   = (rec.get("pname")  as string | null) ?? "";
+        const dkey    = (rec.get("dkey")   as string | null) ?? "";
+        const dtext   = (rec.get("dtext")  as string | null) ?? "";
+        const dsource = (rec.get("dsource") as string | null) ?? "";
+        const tname   = (rec.get("tname")  as string | null) ?? null;
+
+        const pid = `per_${pname}`;
+        const did = `dec_${dkey}`;
+
+        if (pname && !nodes.has(pid))
+          nodes.set(pid, { id: pid, label: "Person", name: pname });
+
+        if (dkey && !nodes.has(did))
+          nodes.set(did, {
+            id: did, label: "Decision",
+            name: dtext.length > 60 ? dtext.slice(0, 60) + "…" : dtext,
+            source: dsource,
+          });
+
+        if (pname && dkey) {
+          const lk = `${pid}→${did}`;
+          if (!linksSet.has(lk)) { linksSet.add(lk); links.push({ source: pid, target: did, type: "MADE" }); }
+        }
+
+        if (tname) {
+          const tid = `top_${tname}`;
+          if (!nodes.has(tid))
+            nodes.set(tid, { id: tid, label: "Topic", name: tname });
+          if (dkey) {
+            const lk = `${did}→${tid}`;
+            if (!linksSet.has(lk)) { linksSet.add(lk); links.push({ source: did, target: tid, type: "ABOUT" }); }
+          }
+        }
+      }
+
+      res.json({ nodes: [...nodes.values()], links });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Graph query failed";
+      console.error("[graph] Error:", message);
+      res.status(500).json({ error: message });
+    } finally {
+      await session.close();
+      await driver.close();
+    }
+  });
+
   // Live stats from Neo4j for the Visualise dashboard
   router.get("/stats", async (_req: Request, res: Response) => {
     const uri = process.env.NEO4J_URI ?? "bolt://localhost:7687";

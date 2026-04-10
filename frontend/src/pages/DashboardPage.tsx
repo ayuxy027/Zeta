@@ -1,12 +1,13 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Hash, Mail, FileText, Mic, 
-  MessageSquare, Settings, 
+import {
+  Hash, Mail, FileText, Mic,
+  MessageSquare, Settings,
   TrendingUp, Users, Database, Layers,
   ChevronRight, Activity, Clock, AlertCircle
 } from 'lucide-react';
 import { authConfig } from '../auth/config';
+import KnowledgeGraphPanel from '../components/common/KnowledgeGraphPanel';
 
 type StatsData = {
   counts: { decisions: number; people: number; topics: number; sources: number };
@@ -255,6 +256,11 @@ const DashboardPage: React.FC = () => {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Knowledge Graph Visualization */}
+        <div className="mt-6">
+          <KnowledgeGraphPanel />
         </div>
       </div>
     </div>
