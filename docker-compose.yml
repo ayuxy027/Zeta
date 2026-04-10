@@ -1,20 +1,6 @@
 name: zeta
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: zeta
-      POSTGRES_PASSWORD: zeta
-      POSTGRES_DB: zeta
-    volumes:
-      - zeta_pg:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U zeta -d zeta']
-      interval: 3s
-      timeout: 5s
-      retries: 10
-
   redis:
     image: redis:7-alpine
     healthcheck:
@@ -56,14 +42,11 @@ services:
       REDIS_URL: redis://redis:6379
       REDIS_ENABLED: 'true'
       AUTH0_BASE_URL: http://localhost:3001
-      DB_URL: postgresql://zeta:zeta@postgres:5432/zeta?sslmode=disable
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: password
       CHROMADB_URL: http://chromadb:8000
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       neo4j:
@@ -72,6 +55,5 @@ services:
         condition: service_healthy
 
 volumes:
-  zeta_pg:
   zeta_neo4j:
   zeta_chroma:
