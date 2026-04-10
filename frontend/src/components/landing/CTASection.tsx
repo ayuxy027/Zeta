@@ -20,13 +20,13 @@ const CTASection: React.FC = () => {
                         delay={200}
                         isView={true}
                     >
-                        Ship 10x Faster
+                        Open The Marketplace
                     </Highlighter>
                     ?
                 </h2>
                 <p className="mx-auto mb-10 max-w-2xl text-lg text-gray-600">
-                    Built for startups. Automate PM work so devrels, team leads, and solo founders can{' '}
-                    <span className="font-semibold text-gray-900">focus on building their MVP</span>.
+                    Enable the twelve plugin agents you need. Ask in plain English—get answers stitched from Gmail, Slack, Drive, Meet, and the rest, with a{' '}
+                    <span className="font-semibold text-gray-900">clear recap your team can trust</span>.
                 </p>
 
                 <button

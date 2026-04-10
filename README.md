@@ -1,111 +1,85 @@
 # Zeta
 
-**Your Personalised PM Agent**
+**AI agent marketplace — twelve plugin agents for how your team works**
+
+---
+
+## What it is
+
+Zeta is a **personalized AI agent marketplace**: **twelve integrations**, each shipped as its own **plugin-style AI agent**—not a generic “features” list. **Core agents** cover **Gmail**, **Google Drive**, **Slack**, and **meetings**. **Extended agents** cover **Notion**, **GitHub**, **Jira**, **Salesforce**, **Zoho**, **Zoom**, **Microsoft 365**, and **Microsoft Teams**. Queries use **agent-to-agent (A2A)** flow: a **domain agent** talks to the tool; a **partner agent** synthesizes and responds. Turn on what you need; ask in plain English.
 
 ---
 
 ## Problem
 
-**For Startups & Small Teams:**
-
-In startups, product management responsibilities often fall on devrels, team leads, or solo founders who don't have dedicated PM resources. These individuals waste 40% of their week on manual PM work: writing notes, drafting PRDs, creating Jira tickets, translating meetings into actionable plans, and planning sprints.
-
-This time could be better spent **building the MVP** and shipping product features.
-
-Heizen PM Agent started solving this but locks features behind enterprise sales (not startup-friendly), offers limited integrations, forces vendor lock-in, and is too expensive for early-stage startups.
+Work splits across mail, files, chat, and calls. Jumping between apps for one answer wastes time. Zeta’s pitch is **one marketplace**: enable agents like plugins, ask once, and get answers that **cite the systems you connected**—not a black-box chat bubble.
 
 ---
 
-## Solution
+## This repository
 
-Zeta is an AI Product Manager agent designed for **startups** that automates ideation, planning, and analysis—so devrels, team leads, and solo founders can focus solely on **building their MVP** instead of paperwork.
-
-**Automates:**
-- **Ideation** - Captures and structures ideas from meetings
-- **Planning** - Converts discussions into sprints and backlogs  
-- **Analysis** - Generates PRDs, user stories, and insights
-
-Built specifically for startups, not enterprise. Affordable. Works for solo founders.
-
----
-
-## Core Features
-
-🤖 **AI Meeting Analysis** - Auto-joins calls, transcribes with speaker ID, generates MOMs, action plans using Groq's Meta Llama  
-🎙️ **Meeting Transcription** - Real-time speech-to-text from any meeting  
-📋 **MOM Generation** - Automatic meeting minutes with decision tracking  
-✅ **Action Plan Creation** - Identifies and assigns action items from discussions  
-⚡ **One-Click PRD Generation** - Meeting → structured Product Requirement Documents  
-🎯 **Smart User Stories** - Formatted stories with acceptance criteria & point estimates  
-🚀 **Intelligent Sprint Planning** - AI creates sprint plans from goals & backlog  
-🔗 **Deep Integrations** - Push to Jira, Linear, Trello, ClickUp, Slack, Figma  
-🔒 **Privacy-First** - Local audio processing, no data exfiltration without consent  
-🎨 **Beautiful Vintage Design** - Toggle between modern UI and signature B&W aesthetic  
-📱 **Fully Responsive** - Works on desktop, tablet, mobile  
+| Area | Notes |
+|------|--------|
+| **Frontend** | React, TypeScript, Vite, Tailwind — vintage UI, dashboard, Mail & Drive flows |
+| **Backend** | Node.js, Express, TypeScript |
+| **Auth** | Auth0 (server-side OIDC, cookies) |
+| **Database** | PostgreSQL via Prisma + `pg` (ingest metadata, Google connections) |
+| **Integrations (today)** | Google OAuth (Gmail, Drive ingest), Slack Events API → BullMQ (Redis) |
+| **Agent roadmap** | Meetings plus extended marketplace agents (see product copy / `docs/ps.txt`) |
+| **Hackathon PS** | LangChain, ChromaDB, Neo4j — memory & graph layer (see `docs/baseline.md`) |
 
 ---
 
-## Heizen vs Zeta: Feature Comparison
-
-| Feature | Heizen PM Agent | Zeta |
-|---------|-----------------|------|
-| **Meeting Capture** | Chrome extension, cloud-only | Chrome extension + local processing option |
-| **PRD Generation** | Generic format | Industry-standard templates |
-| **User Stories** | Manual creation | Auto-generated with estimates |
-| **Sprint Planning** | Basic planning | AI + velocity analysis |
-| **Integrations** | Jira, Trello (2 tools) | Jira, Linear, Trello, ClickUp, Slack, Figma, GitHub (7+ tools) |
-| **Pricing** | Hidden, sales-led ($$$) | Transparent, self-serve ($29-79/user) |
-| **Privacy** | Cloud-only | Local processing toggle |
-| **Design** | Generic modern | Vintage aesthetic (your signature) |
-
----
-
-## Tech Stack
-
-**Frontend**: React 19 + TypeScript + Tailwind CSS  
-**Backend**: Node.js + Express + TypeScript  
-**Auth**: Auth0 via server-side OIDC session  
-**AI**: Groq SDK (Meta Llama) + multi-LLM routing  
-**Audio**: Web Speech API + Deepgram  
-
----
-
-## Getting Started
+## Getting started
 
 ```bash
 cd backend
 npm install && npm run dev
 
-cd frontend
+cd ../frontend
 npm install && npm run dev
-# Visit localhost:5173
+# App: http://localhost:5173 — API: http://localhost:3001
 ```
 
-## OAuth Setup (Auth0)
+---
 
-Create `backend/.env` from `backend/.env.example` and set:
+## Environment
+
+Copy `backend/.env.example` → `backend/.env` and set at least:
 
 ```bash
 PORT=3001
 FRONTEND_URL=http://localhost:5173
+DB_URL=postgresql://...
 AUTH0_ISSUER_BASE_URL=https://your-tenant.us.auth0.com
 AUTH0_BASE_URL=http://localhost:3001
-AUTH0_CLIENT_ID=your-client-id
-AUTH0_CLIENT_SECRET=your-client-secret
-AUTH0_SECRET=replace-with-a-long-random-secret
+AUTH0_CLIENT_ID=...
+AUTH0_CLIENT_SECRET=...
+AUTH0_SECRET=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
 ```
 
-Create `frontend/.env` with:
+Create `frontend/.env`:
 
 ```bash
 VITE_BACKEND_URL=http://localhost:3001
 ```
 
-In Auth0 app settings, add:
-- Allowed Callback URL: `http://localhost:3001/auth/callback`
-- Allowed Logout URL: `http://localhost:5173`
-- Allowed Web Origin: `http://localhost:5173`
+**Auth0:** Allowed Callback URL `http://localhost:3001/auth/callback`, Logout `http://localhost:5173`, Web Origin `http://localhost:5173`.
+
+**Google Cloud:** Enable Gmail API & Drive API. OAuth client redirect URIs:
+
+- `http://localhost:3001/api/integrations/google/callback` (Drive)
+- `http://localhost:3001/api/integrations/google-mail/callback` (Gmail)
 
 ---
 
-**Built for PMs who ship. Not for paperwork.**
+## Docs
+
+- Positioning & problem statement: [`docs/ps.txt`](docs/ps.txt)  
+- Baseline / demo bar: [`docs/baseline.md`](docs/baseline.md)
+
+---
+
+**Twelve agents. One marketplace. Ask once—not another tab hunt.**

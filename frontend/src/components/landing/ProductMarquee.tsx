@@ -3,17 +3,28 @@ import { ScrollVelocityContainer, ScrollVelocityRow } from '../effects/ScrollMar
 
 const ProductMarquee: React.FC = () => {
     const topRowProducts = [
-        'Live Transcription',
-        'Instant PRDs',
-        'Sprint Planning',
-        'AI Insights',
+        'Gmail',
+        'Google Drive',
+        'Slack',
+        'Meetings',
+    ];
+
+    const a2aRowProducts = [
+        'A2A',
+        'Domain → partner',
+        'Dual-agent handoff',
+        'Orchestrated run',
     ];
 
     const bottomRowProducts = [
-        'Meeting Minutes',
-        'Action Items',
-        'User Stories',
-        'Automated Analysis',
+        'Notion',
+        'GitHub',
+        'Jira',
+        'Salesforce',
+        'Zoho',
+        'Zoom',
+        'Microsoft 365',
+        'Teams',
     ];
 
     return (
@@ -25,6 +36,15 @@ const ProductMarquee: React.FC = () => {
                             <React.Fragment key={index}>
                                 <span className="mx-12 text-gray-700">{product}</span>
                                 <span className="text-gray-300">•</span>
+                            </React.Fragment>
+                        ))}
+                    </ScrollVelocityRow>
+                    <div className="h-[5px]"></div>
+                    <ScrollVelocityRow baseVelocity={4} direction={1}>
+                        {a2aRowProducts.map((product, index) => (
+                            <React.Fragment key={`a2a-${index}`}>
+                                <span className="mx-12 text-indigo-700">{product}</span>
+                                <span className="text-indigo-200">•</span>
                             </React.Fragment>
                         ))}
                     </ScrollVelocityRow>

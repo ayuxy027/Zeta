@@ -23,7 +23,7 @@ const IntegrationSection: React.FC = () => {
                             >
                                 Apps
                             </Highlighter>{' '}
-                            Eating Your{' '}
+                            Fracturing{' '}
                             <Highlighter
                                 action="underline"
                                 color="#6366f1"
@@ -33,7 +33,7 @@ const IntegrationSection: React.FC = () => {
                                 delay={400}
                                 isView={true}
                             >
-                                Time
+                                Team memory
                             </Highlighter>
                             ?
                         </h2>
@@ -47,16 +47,16 @@ const IntegrationSection: React.FC = () => {
                                 delay={600}
                                 isView={true}
                             >
-                                Stop switching between Zoom, Slack, Notion, Jira, and endless note-taking apps.
+                                Twelve AI agents ship as plugins. Turn on Gmail, Drive, Slack, Meet, then add Notion to Teams.
                             </Highlighter>
-                            Zeta connects them all. One meeting. One platform. Everything you need flows into your tools automatically.
+                            Zeta is your marketplace: pick the agents you need, ask once, and answers pull from the tools you enabled. Runs use <span className="font-semibold text-gray-900">A2A</span>: one agent pulls from the plugin, a second agent answers.
                         </p>
 
                         <div className="space-y-4">
                             {[
-                                { icon: Clock, text: "Stop context-switching between 10+ apps" },
-                                { icon: Zap, text: "Automate ideation, planning, and analysis" },
-                                { icon: Shield, text: "Focus on building your MVP, not paperwork" }
+                                { icon: Clock, text: "Ship Gmail, Drive, Slack, and Meetings as your lead agents" },
+                                { icon: Zap, text: "Add Notion, GitHub, Jira, Salesforce, Zoho, Zoom, Office & Teams" },
+                                { icon: Shield, text: "Twelve plugins total—toggle agents on without bloating the UI" }
                             ].map((item, i) => (
                                 <div key={i} className="flex gap-4 items-center">
                                     <div className="flex flex-shrink-0 justify-center items-center w-10 h-10 bg-gray-100 rounded-lg">

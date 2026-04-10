@@ -2,33 +2,33 @@ import React from 'react';
 import { RiSpeakAiLine } from 'react-icons/ri';
 import { GrDocumentVerified } from 'react-icons/gr';
 import { LiaRunningSolid } from 'react-icons/lia';
-import { TbRobot } from 'react-icons/tb';
+import { TbArrowsRightLeft } from 'react-icons/tb';
 import { Highlighter } from '../effects/Highlighter';
 
 const FeaturesSection: React.FC = () => {
     const features = [
         {
             icon: RiSpeakAiLine,
-            title: 'Live Transcription',
-            desc: 'Real-time speech-to-text with speaker identification',
+            title: '12 Plugin Agents',
+            desc: 'Every integration is an installable AI agent—not a buried setting',
             delay: 100
         },
         {
             icon: GrDocumentVerified,
-            title: 'Instant PRDs',
-            desc: 'Meeting → structured Product Requirement Documents',
+            title: 'Agent Marketplace',
+            desc: 'Browse Gmail to Teams, enable agents, and route questions smartly',
             delay: 200
         },
         {
             icon: LiaRunningSolid,
-            title: 'Sprint Planning',
-            desc: 'AI creates outcome-aligned sprint plans from backlog',
+            title: 'Core + Extended',
+            desc: 'Lead with mail, Drive, Slack, meetings. Stack the rest when ready',
             delay: 300
         },
         {
-            icon: TbRobot,
-            title: 'MCP Support',
-            desc: 'Coming soon',
+            icon: TbArrowsRightLeft,
+            title: 'A2A dual agents',
+            desc: 'Agent-to-agent (A2A): domain agent fetches from a tool, partner agent synthesizes and replies',
             delay: 400
         }
     ];
@@ -40,7 +40,7 @@ const FeaturesSection: React.FC = () => {
             <div className="relative px-6 mx-auto max-w-6xl lg:px-8">
                 <div className="mb-20 text-center">
                     <h2 className="mb-6 text-4xl font-bold tracking-tight text-gray-900 font-display sm:text-5xl lg:text-6xl">
-                        Leverage{' '}
+                        Shop{' '}
                         <Highlighter
                             action="highlight"
                             color="#fef3c7"
@@ -50,17 +50,17 @@ const FeaturesSection: React.FC = () => {
                             delay={200}
                             isView={true}
                         >
-                            Agentic AI
+                            AI Agents
                         </Highlighter>{' '}
-                        Like Never Before
+                        Like Plugins
                     </h2>
                     <p className="mx-auto max-w-3xl text-xl leading-relaxed text-gray-600">
-                        Not another AI wrapper.{' '}
-                        <span className="font-semibold text-gray-900">Built for startups, devrels, team leads, and solo founders.</span>
+                        Not another silent chatbot.{' '}
+                        <span className="font-semibold text-gray-900">Twelve plugin agents, one roster, and A2A handoffs on every serious query.</span>
                     </p>
                     <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-500">
-                        Automate ideation, planning, and analysis—so you can focus on{' '}
-                        <span className="font-semibold text-gray-700">building your MVP.</span>
+                        Core mail, Drive, Slack, and meetings, then Notion through Teams.{' '}
+                        <span className="font-semibold text-gray-700">Domain agent pulls data; partner agent packages the answer.</span>
                     </p>
                 </div>
 

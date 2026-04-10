@@ -41,7 +41,7 @@ const Footer: React.FC = () => {
                             <span className="text-xl font-display font-bold text-gray-900">Zeta</span>
                         </button>
                         <p className="text-sm text-gray-600">
-                            Your Personalised PM Agent. Built for startups who ship.
+                            Twelve AI agents as plugins—your marketplace for work answers.
                         </p>
                     </div>
 
@@ -110,7 +110,7 @@ const Footer: React.FC = () => {
                             © {currentYear} Zeta. All rights reserved.
                         </p>
                         <p className="text-sm text-gray-600">
-                            Built for PMs who ship. Not for paperwork.
+                            Plug in agents. Ask once. Skip the tab maze.
                         </p>
                     </div>
                 </div>
