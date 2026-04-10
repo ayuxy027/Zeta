@@ -2,6 +2,7 @@ import 'dotenv/config';
 import cors from 'cors';
 import express, { type Request, type Response } from 'express';
 import { auth, requiresAuth } from 'express-openid-connect';
+import slackRouter from './routers/slack.router.js';
 
 const port = Number(process.env.PORT ?? 3001);
 const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
@@ -16,6 +17,9 @@ app.use(
 );
 
 app.use(express.json());
+
+// Slack webhook endpoint (no auth required)
+app.use('/slack', slackRouter);
 
 app.use(
   auth({
