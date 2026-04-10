@@ -10,4 +10,4 @@ RUN npx prisma generate
 RUN npm run build && npm prune --omit=dev
 
 EXPOSE 3001
-CMD ["node", "dist/server.js"]
+CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/server.js"]

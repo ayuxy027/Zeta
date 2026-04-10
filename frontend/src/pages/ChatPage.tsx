@@ -5,6 +5,8 @@ import {
   BrainCircuit,
   CheckCircle2,
   Clock3,
+  FileText,
+  ListChecks,
   Paperclip,
   Presentation,
   SendHorizontal,
@@ -27,8 +29,15 @@ type Message = {
   id: string;
   role: 'assistant' | 'user';
   text: string;
+  detailedText?: string;
   meta?: string;
   sources?: SourceRef[];
+  thinking?: string;
+  davidThinking?: string;
+  davidDecisions?: string[];
+  sandyThinking?: string;
+  sandyConcise?: string;
+  sandyDetailed?: string;
   queryContext?: {
     detected: string[];
     confidence?: number;
@@ -168,6 +177,8 @@ const ChatPage: React.FC = () => {
   const [showAliasMenu, setShowAliasMenu] = React.useState(false);
   const [aliasSearch, setAliasSearch] = React.useState('');
   const [agentFlow, setAgentFlow] = React.useState<AgentFlowState>(createIdleAgentFlow());
+  const [activeAgentTab, setActiveAgentTab] = React.useState<'david' | 'sandy'>('david');
+  const [sandyViewMode, setSandyViewMode] = React.useState<'concise' | 'detailed'>('concise');
 
   const timersRef = React.useRef<number[]>([]);
   const requestTokenRef = React.useRef(0);
@@ -236,6 +247,8 @@ const ChatPage: React.FC = () => {
     setShowAliasMenu(false);
     setAliasSearch('');
     setAgentFlow(createIdleAgentFlow());
+    setActiveAgentTab('david');
+    setSandyViewMode('concise');
     timersRef.current.forEach((id) => window.clearTimeout(id));
     timersRef.current = [];
   };
@@ -268,6 +281,8 @@ const ChatPage: React.FC = () => {
     setShowAliasMenu(false);
     setAliasSearch('');
     setResponding(true);
+    setActiveAgentTab('david');
+    setSandyViewMode('concise');
 
     setAgentFlow({
       activeAgent: 'david',
@@ -361,6 +376,12 @@ const ChatPage: React.FC = () => {
       }),
     }));
 
+    scheduleFlowStep(token, 1450, (prev) => {
+      if (requestTokenRef.current !== token) return prev;
+      setActiveAgentTab('sandy');
+      return prev;
+    });
+
     if (tagged.length > 0) {
       const toastTimer = window.setTimeout(() => {
         if (requestTokenRef.current !== token) return;
@@ -379,6 +400,10 @@ const ChatPage: React.FC = () => {
       });
       const data = await res.json() as {
         answer?: string;
+        detailedAnswer?: string;
+        thinking?: string;
+        david?: { thinking?: string; decisions?: string[] };
+        sandy?: { thinking?: string; concise?: string; detailed?: string };
         sources?: { source_id: string; source_type: string; preview: string; author?: string; score: number }[];
         error?: string;
       };
@@ -392,20 +417,40 @@ const ChatPage: React.FC = () => {
 
       if (requestTokenRef.current !== token) return;
 
-      setConversations((prev) => [
-        ...prev,
-        {
-          id: `q-a-${Date.now()}`,
-          role: 'assistant',
-          text: data.answer ?? data.error ?? 'No response',
-          meta: 'Zeta · just now',
-          sources,
-          queryContext: {
-            detected: tagged.length > 0 ? tagged : ['all-connectors'],
-            confidence: sources.length ? Math.round((sources[0]?.label.includes('%') ? Number(sources[0].label.match(/(\d+)/)?.[1]) : 78)) : 78,
-          },
+      const assistantMessage: Message = {
+        id: `q-a-${Date.now()}`,
+        role: 'assistant',
+        text: data.answer ?? data.error ?? 'No response',
+        meta: 'Zeta · just now',
+        sources,
+        davidDecisions: data.david?.decisions ?? [],
+        queryContext: {
+          detected: tagged.length > 0 ? tagged : ['all-connectors'],
+          confidence: sources.length ? Math.round((sources[0]?.label.includes('%') ? Number(sources[0].label.match(/(\d+)/)?.[1]) : 78)) : 78,
         },
-      ]);
+      };
+      const detailedCandidate = data.detailedAnswer ?? data.answer;
+      if (detailedCandidate !== undefined) {
+        assistantMessage.detailedText = detailedCandidate;
+      }
+      if (data.thinking) {
+        assistantMessage.thinking = data.thinking;
+      }
+      if (data.david?.thinking) {
+        assistantMessage.davidThinking = data.david.thinking;
+      }
+      if (data.sandy?.thinking) {
+        assistantMessage.sandyThinking = data.sandy.thinking;
+      }
+      if (data.sandy?.concise) {
+        assistantMessage.sandyConcise = data.sandy.concise;
+      }
+      if (data.sandy?.detailed) {
+        assistantMessage.sandyDetailed = data.sandy.detailed;
+      }
+
+      setConversations((prev) => [...prev, assistantMessage]);
+      setActiveAgentTab('sandy');
 
       setAgentFlow((prev) => ({
         ...prev,
@@ -486,6 +531,11 @@ const ChatPage: React.FC = () => {
     if (status === 'running') return <Clock3 className="w-3.5 h-3.5 text-indigo-600" aria-hidden />;
     return <Clock3 className="w-3.5 h-3.5 text-vintage-gray-400" aria-hidden />;
   };
+
+  const latestAssistant = React.useMemo(
+    () => [...conversations].reverse().find((m) => m.role === 'assistant' && m.id !== 'q-a-1'),
+    [conversations],
+  );
 
   return (
     <div className="min-h-screen bg-vintage-white pt-20 pb-12 text-vintage-black">
@@ -594,6 +644,97 @@ const ChatPage: React.FC = () => {
               </section>
             </div>
 
+            <section className="rounded-2xl border border-gray-200 bg-white p-3 sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="inline-flex rounded-full border border-gray-200 p-1 bg-gray-50">
+                  <button
+                    type="button"
+                    onClick={() => setActiveAgentTab('david')}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${activeAgentTab === 'david' ? 'bg-indigo-600 text-white' : 'text-vintage-gray-700 hover:bg-white'}`}
+                  >
+                    David
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveAgentTab('sandy')}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${activeAgentTab === 'sandy' ? 'bg-indigo-600 text-white' : 'text-vintage-gray-700 hover:bg-white'}`}
+                  >
+                    Sandy
+                  </button>
+                </div>
+
+                {activeAgentTab === 'sandy' ? (
+                  <div className="inline-flex rounded-full border border-gray-200 p-1 bg-gray-50">
+                    <button
+                      type="button"
+                      onClick={() => setSandyViewMode('concise')}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${sandyViewMode === 'concise' ? 'bg-emerald-600 text-white' : 'text-vintage-gray-700 hover:bg-white'}`}
+                    >
+                      Concise
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSandyViewMode('detailed')}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${sandyViewMode === 'detailed' ? 'bg-emerald-600 text-white' : 'text-vintage-gray-700 hover:bg-white'}`}
+                    >
+                      Detailed
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              {latestAssistant ? (
+                activeAgentTab === 'david' ? (
+                  <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    <article className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-3">
+                      <p className="text-xs uppercase tracking-wide font-semibold text-indigo-700 flex items-center gap-1.5">
+                        <BrainCircuit className="w-3.5 h-3.5" aria-hidden /> David thinking
+                      </p>
+                      <p className="mt-2 text-sm text-indigo-900 whitespace-pre-wrap">
+                        {latestAssistant.davidThinking ?? latestAssistant.thinking ?? 'David is preparing the analysis...'}
+                      </p>
+                    </article>
+                    <article className="rounded-xl border border-gray-200 bg-gray-50/70 p-3">
+                      <p className="text-xs uppercase tracking-wide font-semibold text-vintage-gray-700 flex items-center gap-1.5">
+                        <ListChecks className="w-3.5 h-3.5" aria-hidden /> David conclusions
+                      </p>
+                      <ul className="mt-2 space-y-1.5 text-sm text-vintage-gray-800 list-disc pl-5">
+                        {(latestAssistant.davidDecisions && latestAssistant.davidDecisions.length > 0
+                          ? latestAssistant.davidDecisions
+                          : ['Awaiting concrete decision extraction from current context.'])
+                          .map((decision) => (
+                            <li key={decision}>{decision}</li>
+                          ))}
+                      </ul>
+                    </article>
+                  </div>
+                ) : (
+                  <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    <article className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+                      <p className="text-xs uppercase tracking-wide font-semibold text-emerald-700 flex items-center gap-1.5">
+                        <Presentation className="w-3.5 h-3.5" aria-hidden /> Sandy thinking
+                      </p>
+                      <p className="mt-2 text-sm text-emerald-900 whitespace-pre-wrap">
+                        {latestAssistant.sandyThinking ?? latestAssistant.thinking ?? 'Sandy is composing the final response...'}
+                      </p>
+                    </article>
+                    <article className="rounded-xl border border-gray-200 bg-white p-3">
+                      <p className="text-xs uppercase tracking-wide font-semibold text-vintage-gray-700 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5" aria-hidden /> Sandy output
+                      </p>
+                      <p className="mt-2 text-sm text-vintage-gray-900 whitespace-pre-wrap">
+                        {sandyViewMode === 'concise'
+                          ? latestAssistant.sandyConcise ?? latestAssistant.text
+                          : latestAssistant.sandyDetailed ?? latestAssistant.detailedText ?? latestAssistant.text}
+                      </p>
+                    </article>
+                  </div>
+                )
+              ) : (
+                <p className="mt-3 text-xs text-vintage-gray-500">Send a message to view David and Sandy analysis tabs.</p>
+              )}
+            </section>
+
             <div className="mt-2 flex items-center justify-end gap-3">
               <button
                 type="button"
@@ -682,6 +823,12 @@ const ChatPage: React.FC = () => {
                       }`}
                     >
                       <p>{message.text}</p>
+                      {message.thinking ? (
+                        <div className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">Thinking</p>
+                          <p className="mt-1 text-xs text-indigo-900 whitespace-pre-wrap">{message.thinking}</p>
+                        </div>
+                      ) : null}
                       {message.meta ? <p className="text-[11px] mt-2 text-vintage-gray-500">{message.meta}</p> : null}
 
                       {message.sources && message.sources.length > 0 ? (
