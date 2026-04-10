@@ -1,6 +1,7 @@
 export interface SlackEvent {
   type: string;
   event_id?: string;
+  team_id?: string;
   event?: SlackMessageEvent | SlackUrlVerificationEvent;
   challenge?: string;
 }

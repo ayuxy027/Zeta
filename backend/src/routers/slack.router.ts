@@ -46,6 +46,7 @@ router.post('/events', async (req: Request, res: Response) => {
     if (slackQueue) {
       const jobData: SlackJobData = {
         event_id: body.event_id,
+        team_id: body.team_id,
         event: body.event,
         timestamp: Date.now(),
       };

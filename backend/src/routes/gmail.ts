@@ -14,6 +14,9 @@ import {
   headersFromMessage,
   pickHeader,
 } from "../lib/gmailParse.js";
+import { runPipeline } from "../pipeline/pipeline.js";
+import type { PipelinePayload } from "../pipeline/types.js";
+import { prisma } from "../lib/prisma.js";
 
 const { requiresAuth } = oidc;
 
@@ -446,14 +449,60 @@ export function createGmailRouter() {
         const headers = headersFromMessage(data);
         const bodyText = extractBestBodyText(data.payload ?? undefined);
 
+        const subject = pickHeader(headers, "Subject");
+        const from = pickHeader(headers, "From");
+        const date = pickHeader(headers, "Date");
+
+        // Persist raw message to PostgreSQL (resolve auth0Sub → Prisma User.id)
+        prisma.user.findUnique({ where: { auth0Sub: userSub }, select: { id: true } })
+          .then((dbUser: { id: string } | null) => {
+            if (!dbUser) return;
+            return prisma.gmailMessage.upsert({
+              where: { userId_gmailMessageId: { userId: dbUser.id, gmailMessageId: data.id ?? messageId } },
+              update: {},
+              create: {
+                userId: dbUser.id,
+                gmailMessageId: data.id ?? messageId,
+                threadId: data.threadId ?? null,
+                subject,
+                from,
+                to: pickHeader(headers, "To"),
+                date,
+                snippet: data.snippet ?? null,
+                bodyText: bodyText ?? null,
+                labelIds: data.labelIds ?? [],
+              },
+            });
+          })
+          .catch((err: unknown) => console.warn("[gmail] DB persist failed:", (err instanceof Error ? err.message : String(err))));
+
+        // Run through universal pipeline (async, non-blocking)
+        if (bodyText?.trim()) {
+          const pipelinePayload: PipelinePayload = {
+            source_id: `gmail_${data.id ?? messageId}`,
+            source_type: "gmail",
+            raw_text: bodyText,
+            metadata: {
+              author: from ?? undefined,
+              timestamp: date
+                ? new Date(date).toISOString()
+                : new Date().toISOString(),
+              subject: subject ?? undefined,
+            },
+          };
+          runPipeline(pipelinePayload).catch((err) =>
+            console.error("[gmail] Pipeline error:", err),
+          );
+        }
+
         res.json({
           id: data.id ?? messageId,
           threadId: data.threadId ?? null,
           snippet: data.snippet ?? null,
-          subject: pickHeader(headers, "Subject"),
-          from: pickHeader(headers, "From"),
+          subject,
+          from,
           to: pickHeader(headers, "To"),
-          date: pickHeader(headers, "Date"),
+          date,
           labelIds: data.labelIds ?? [],
           bodyText,
         });

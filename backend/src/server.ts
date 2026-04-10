@@ -4,10 +4,12 @@ import express, { type Request, type Response } from "express";
 import oidc from "express-openid-connect";
 import slackRouter from "./routers/slack.router.js";
 import { initDb } from "./db/pool.js";
+import { initNeo4j } from "./services/neo4j.service.js";
 import { createDriveIngestRouter } from "./routes/driveIngest.js";
 import { createGmailRouter } from "./routes/gmail.js";
 import { createIntegrationsRouter } from "./routers/integrations.router.js";
 import { prisma } from "./lib/prisma.js";
+import { createQueryRouter } from "./routes/query.js";
 import { startSlackWorker } from "./workers/slack.worker.js";
 
 const port = Number(process.env.PORT ?? 3001);
@@ -249,9 +251,11 @@ app.get(
 app.use("/api", createDriveIngestRouter());
 app.use("/api", createGmailRouter());
 app.use("/api/integrations", createIntegrationsRouter());
+app.use("/api", createQueryRouter());
 
 async function start() {
   await initDb();
+  await initNeo4j();
   app.listen(port, () => {
     console.log(`Zeta backend listening on http://localhost:${port}`);
     startSlackWorker();

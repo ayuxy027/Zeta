@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker run:*)",
+      "Bash(docker exec zeta-redis:*)",
+      "Bash(npm run:*)",
+      "Bash(curl:*)",
+      "Bash(ngrok version:*)",
+      "Read(//c/Users/sumit/.ngrok2/**)",
+      "Read(//c/Users/sumit/AppData/Local/ngrok/**)",
+      "Bash(ngrok http:*)",
+      "Bash(taskkill /F /IM ngrok.exe)",
+      "Bash(Get-Process ngrok:*)",
+      "Bash(Stop-Process -Force)",
+      "Bash(Start-Sleep 2)",
+      "Bash(Write-Output \"killed\")",
+      "Bash(gh pr:*)",
+      "Bash(npm install:*)",
+      "Bash(npx prisma:*)",
+      "Bash(xargs grep:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(npm test:*)",
+      "Bash(npx tsc:*)",
+      "Bash(docker pull:*)",
+      "Bash(docker rm:*)",
+      "Bash(npm list:*)",
+      "Bash(node --experimental-vm-modules ./node_modules/jest/bin/jest.js --testPathPattern=\"unit\")",
+      "Bash(node --experimental-vm-modules ./node_modules/jest/bin/jest.js tests/unit/)",
+      "Bash(npm ls:*)",
+      "Bash(node -e \"const c = require\\('chromadb'\\); console.log\\(Object.keys\\(c\\).filter\\(k => k.toLowerCase\\(\\).includes\\('embed'\\) || k.toLowerCase\\(\\).includes\\('google'\\)\\)\\)\")",
+      "Bash(node -e ':*)",
+      "Bash(node -e \"console.log\\(require\\('@google/generative-ai/package.json'\\).version\\)\")",
+      "Bash(python3 -c ':*)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\);r.results.forEach\\(\\(res,i\\)=>{console.log\\('Result',i,':',JSON.stringify\\(res.data.slice\\(0,5\\)\\)}\\)}\\)}\")"
+    ]
+  }
+}

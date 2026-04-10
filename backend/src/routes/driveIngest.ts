@@ -8,6 +8,9 @@ import {
   getOAuth2ClientForUser,
 } from "../services/googleDriveClient.js";
 import { getPool } from "../db/pool.js";
+import { prisma } from "../lib/prisma.js";
+import { runPipeline } from "../pipeline/pipeline.js";
+import type { PipelinePayload } from "../pipeline/types.js";
 import { signOAuthState, verifyOAuthState } from "../lib/oauthState.js";
 import { encryptToken } from "../lib/tokenCrypto.js";
 import { isAllowedMime } from "../lib/allowedMime.js";
@@ -353,24 +356,41 @@ export function createDriveIngestRouter() {
 
       const extractedText = sections.join("\n\n").trim();
 
-      const insert = await pool.query<{ id: string }>(
-        `INSERT INTO document_extractions (user_sub, display_name, source_drive_file_ids, sources_json, extracted_text)
-         VALUES ($1, $2, $3::jsonb, $4::jsonb, $5)
-         RETURNING id`,
-        [
-          userSub,
-          displayName,
-          JSON.stringify(fileIds),
-          JSON.stringify(sources),
-          extractedText,
-        ],
-      );
-
-      const id = insert.rows[0]?.id;
-      if (!id) {
-        res.status(500).json({ error: "Failed to save extraction." });
+      const dbUser = await prisma.user.findUnique({
+        where: { auth0Sub: userSub },
+        select: { id: true },
+      });
+      if (!dbUser) {
+        res.status(500).json({ error: "User record not found." });
         return;
       }
+
+      const extraction = await prisma.driveExtraction.create({
+        data: {
+          userId: dbUser.id,
+          displayName,
+          sourceFileIds: fileIds,
+          sourcesJson: sources,
+          extractedText,
+        },
+      });
+
+      const id = extraction.id;
+
+      // Run through the universal pipeline (async, non-blocking for response)
+      const pipelinePayload: PipelinePayload = {
+        source_id: `drive_${id}`,
+        source_type: "drive",
+        raw_text: extractedText,
+        metadata: {
+          author: userSub,
+          timestamp: new Date().toISOString(),
+          subject: displayName,
+        },
+      };
+      runPipeline(pipelinePayload).catch((err) =>
+        console.error("[drive] Pipeline error:", err),
+      );
 
       res.json({
         id,
@@ -391,27 +411,23 @@ export function createDriveIngestRouter() {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      const pool = getPool()!;
-      const { rows } = await pool.query<{
-        id: string;
-        display_name: string;
-        created_at: string;
-        preview: string;
-      }>(
-        `SELECT id, display_name, created_at,
-                LEFT(extracted_text, 400) AS preview
-           FROM document_extractions
-          WHERE user_sub = $1
-          ORDER BY created_at DESC
-          LIMIT 100`,
-        [userSub],
-      );
+      const dbUser = await prisma.user.findUnique({ where: { auth0Sub: userSub }, select: { id: true } });
+      if (!dbUser) {
+        res.json({ documents: [] });
+        return;
+      }
+      const extractions = await prisma.driveExtraction.findMany({
+        where: { userId: dbUser.id },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        select: { id: true, displayName: true, createdAt: true, extractedText: true },
+      });
       res.json({
-        documents: rows.map((r) => ({
-          id: r.id,
-          displayName: r.display_name,
-          createdAt: r.created_at,
-          preview: r.preview,
+        documents: extractions.map((e: { id: string; displayName: string; createdAt: Date; extractedText: string }) => ({
+          id: e.id,
+          displayName: e.displayName,
+          createdAt: e.createdAt,
+          preview: e.extractedText.slice(0, 400),
         })),
       });
     },
@@ -427,31 +443,25 @@ export function createDriveIngestRouter() {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      const id = req.params.id;
-      const pool = getPool()!;
-      const { rows } = await pool.query<{
-        id: string;
-        display_name: string;
-        extracted_text: string;
-        sources_json: unknown;
-        created_at: string;
-      }>(
-        `SELECT id, display_name, extracted_text, sources_json, created_at
-           FROM document_extractions
-          WHERE id = $1 AND user_sub = $2`,
-        [id, userSub],
-      );
-      const row = rows[0];
-      if (!row) {
+      const id = req.params.id as string;
+      const dbUser = await prisma.user.findUnique({ where: { auth0Sub: userSub }, select: { id: true } });
+      if (!dbUser) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      const extraction = await prisma.driveExtraction.findFirst({
+        where: { id, userId: dbUser.id },
+      });
+      if (!extraction) {
         res.status(404).json({ error: "Not found" });
         return;
       }
       res.json({
-        id: row.id,
-        displayName: row.display_name,
-        extractedText: row.extracted_text,
-        sources: row.sources_json,
-        createdAt: row.created_at,
+        id: extraction.id,
+        displayName: extraction.displayName,
+        extractedText: extraction.extractedText,
+        sources: extraction.sourcesJson,
+        createdAt: extraction.createdAt,
       });
     },
   );

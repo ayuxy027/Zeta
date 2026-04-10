@@ -17,6 +17,9 @@ model User {
   updatedAt DateTime @updatedAt
 
   integrationCredentials IntegrationCredential[]
+  slackMessages          SlackMessage[]
+  gmailMessages          GmailMessage[]
+  driveExtractions       DriveExtraction[]
 }
 
 model IntegrationCredential {
@@ -45,4 +48,64 @@ model IntegrationCredential {
   @@unique([userId, provider])
   @@index([userId])
   @@map("integration_credentials")
+}
+
+model SlackMessage {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  eventId     String   @unique
+  teamId      String?
+  channelId   String
+  slackUserId String
+  text        String
+  ts          String
+  threadTs    String?
+  rawPayload  Json
+
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([channelId])
+  @@index([teamId])
+  @@map("slack_messages")
+}
+
+model GmailMessage {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  gmailMessageId String
+  threadId       String?
+  subject        String?
+  from           String?
+  to             String?
+  date           String?
+  snippet        String?
+  bodyText       String?
+  labelIds       Json     @default("[]")
+
+  createdAt      DateTime @default(now())
+
+  @@unique([userId, gmailMessageId])
+  @@index([userId])
+  @@map("gmail_messages")
+}
+
+model DriveExtraction {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  displayName   String
+  sourceFileIds Json
+  sourcesJson   Json
+  extractedText String
+
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@map("drive_extractions")
 }

@@ -64,6 +64,7 @@ export { slackQueue };
 
 export interface SlackJobData {
   event_id: string;
+  team_id: string | undefined;
   event: unknown;
   timestamp: number;
 }

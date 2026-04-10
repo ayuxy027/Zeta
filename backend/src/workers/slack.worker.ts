@@ -1,6 +1,9 @@
 import { Worker, type Job } from "bullmq";
 import { config } from "../config.js";
 import type { SlackJobData } from "../queue/slack.queue.js";
+import { prisma } from "../lib/prisma.js";
+import { runPipeline } from "../pipeline/pipeline.js";
+import type { PipelinePayload } from "../pipeline/types.js";
 
 function redisConnectionFromUrl(url: string) {
   try {
@@ -32,22 +35,79 @@ export function startSlackWorker() {
   const worker = new Worker<SlackJobData>(
     "slack-events",
     async (job: Job<SlackJobData>) => {
-      const { event_id, event } = job.data;
+      const { event_id, team_id, event } = job.data;
       const e = event as Record<string, unknown>;
+
+      const text = (e["text"] as string) ?? "";
+      const channel = (e["channel"] as string) ?? "";
+      const user = (e["user"] as string) ?? "";
+      const ts = (e["ts"] as string) ?? "";
+      const threadTs = (e["thread_ts"] as string | undefined) ?? undefined;
 
       console.log(`\n[Worker] Processing job: ${job.id}`);
       console.log(`  event_id : ${event_id}`);
-      console.log(`  channel  : ${e["channel"]}`);
-      console.log(`  user     : ${e["user"]}`);
-      console.log(`  text     : ${e["text"]}`);
-      console.log(`  ts       : ${e["ts"]}`);
+      console.log(`  channel  : ${channel}`);
+      console.log(`  user     : ${user}`);
+      console.log(`  text     : ${text}`);
 
-      // TODO: fetch full thread via Slack API (conversations.replies)
-      // TODO: LLM entity extraction → decisions, people, reasons, topics
-      // TODO: write to Neo4j
-      // TODO: write to ChromaDB
+      if (!text.trim()) {
+        console.log(`[Worker] Skipping empty message ${event_id}`);
+        return;
+      }
 
-      console.log(`[Worker] Done processing ${event_id}\n`);
+      const payload: PipelinePayload = {
+        source_id: `slack_${channel}_${ts}`,
+        source_type: "slack",
+        raw_text: text,
+        metadata: {
+          author: user,
+          timestamp: new Date(parseFloat(ts) * 1000).toISOString(),
+          channel,
+        },
+      };
+
+      // Persist raw message to PostgreSQL (fire-and-forget, non-blocking)
+      if (team_id) {
+        try {
+          const cred = await prisma.integrationCredential.findFirst({
+            where: { provider: "slack", providerTeamId: team_id, isActive: true },
+            select: { userId: true },
+          });
+          if (cred?.userId) {
+            await prisma.slackMessage.upsert({
+              where: { eventId: event_id },
+              update: {},
+              create: {
+                userId: cred.userId,
+                eventId: event_id,
+                teamId: team_id,
+                channelId: channel,
+                slackUserId: user,
+                text,
+                ts,
+                threadTs,
+                rawPayload: e as object,
+              },
+            });
+            console.log(`[Worker] Persisted SlackMessage ${event_id}`);
+          }
+        } catch (dbErr) {
+          console.warn(`[Worker] DB persist failed for ${event_id}:`, (dbErr as Error).message);
+        }
+      }
+
+      const result = await runPipeline(payload);
+
+      if (result.skipped) {
+        console.log(`[Worker] Skipped ${event_id} — not relevant`);
+      } else {
+        console.log(
+          `[Worker] Processed ${event_id}: ${result.entities?.decisions.length ?? 0} decisions extracted`,
+        );
+      }
+      if (result.error) {
+        console.warn(`[Worker] Partial error: ${result.error}`);
+      }
     },
     {
       connection: {
