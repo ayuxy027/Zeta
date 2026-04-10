@@ -15,4 +15,34 @@ model User {
   picture   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  integrationCredentials IntegrationCredential[]
+}
+
+model IntegrationCredential {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider        String   // 'google_workspace' | 'slack'
+
+  // OAuth tokens (encrypted at rest)
+  accessTokenEnc  String?  // encrypted access token
+  refreshTokenEnc String?  // encrypted refresh token
+  tokenExpiry     DateTime? // when the access token expires
+
+  // Provider-specific metadata
+  providerEmail   String?  // Google: user email, Slack: user email
+  providerTeamId  String?  // Slack team ID
+  providerTeamName String? // Slack team display name
+  providerScopes  String?  // comma-separated scopes granted
+
+  // Connection status
+  isActive        Boolean  @default(true)
+  connectedAt     DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("integration_credentials")
 }

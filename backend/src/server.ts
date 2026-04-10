@@ -6,6 +6,7 @@ import slackRouter from "./routers/slack.router.js";
 import { initDb } from "./db/pool.js";
 import { createDriveIngestRouter } from "./routes/driveIngest.js";
 import { createGmailRouter } from "./routes/gmail.js";
+import { createIntegrationsRouter } from "./routers/integrations.router.js";
 import { prisma } from "./lib/prisma.js";
 import { startSlackWorker } from "./workers/slack.worker.js";
 
@@ -247,6 +248,7 @@ app.get(
 
 app.use("/api", createDriveIngestRouter());
 app.use("/api", createGmailRouter());
+app.use("/api/integrations", createIntegrationsRouter());
 
 async function start() {
   await initDb();
