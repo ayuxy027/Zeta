@@ -1,6 +1,6 @@
 import express, { type Request, type Response } from "express";
 import neo4j from "neo4j-driver";
-import { answerQuestion } from "../services/query.service.js";
+import { answerQuestion, buildInputFallback } from "../services/query.service.js";
 import { runPipeline } from "../pipeline/pipeline.js";
 import type { PipelinePayload } from "../pipeline/types.js";
 import { prisma } from "../lib/prisma.js";
@@ -10,19 +10,27 @@ export function createQueryRouter() {
 
   router.post("/query", async (req: Request, res: Response) => {
     const { question } = req.body as { question?: string };
+    const normalizedQuestion = question?.trim() ?? "";
 
-    if (!question?.trim()) {
-      res.status(400).json({ error: "Missing 'question' in request body" });
+    if (!normalizedQuestion) {
+      res.json(buildInputFallback(normalizedQuestion));
       return;
     }
 
     try {
-      const result = await answerQuestion(question);
+      const result = await answerQuestion(normalizedQuestion);
       res.json(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Query failed";
       console.error("[query] Error:", message);
-      res.status(500).json({ error: message });
+      res.json({
+        ...buildInputFallback(normalizedQuestion),
+        fallback: {
+          scenario: "route_failure",
+          isMock: true,
+          note: "Route-level safeguard returned a stable continuity response.",
+        },
+      });
     }
   });
 

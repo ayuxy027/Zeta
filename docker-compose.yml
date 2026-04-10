@@ -27,6 +27,9 @@ services:
     image: neo4j:5-community
     environment:
       NEO4J_AUTH: neo4j/password
+    ports:
+      - '7474:7474'
+      - '7687:7687'
     volumes:
       - zeta_neo4j:/data
     healthcheck:
@@ -37,6 +40,8 @@ services:
 
   chromadb:
     image: chromadb/chroma:latest
+    ports:
+      - '8000:8000'
     volumes:
       - zeta_chroma:/chroma/chroma
     healthcheck:

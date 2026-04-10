@@ -1,6 +1,15 @@
 import { PrismaClient } from "@prisma/client";
+import { runPipeline } from "../src/pipeline/pipeline.js";
+import type { PipelinePayload } from "../src/pipeline/types.js";
 
 const prisma = new PrismaClient();
+
+function toIsoFromDateHeader(value: string | null | undefined): string {
+  if (!value) return new Date().toISOString();
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return new Date().toISOString();
+  return parsed.toISOString();
+}
 
 async function main() {
   console.log("🌱 Seeding database...");
@@ -632,6 +641,127 @@ Next steps:
   });
 
   console.log("✅ Drive extractions created");
+
+  // ── Backfill memory pipeline (ChromaDB + Neo4j) ──────────────────────────
+
+  console.log("🔄 Backfilling memory pipeline from seeded records...");
+
+  const backfillResults = {
+    attempted: 0,
+    skippedEmpty: 0,
+    skippedByPipeline: 0,
+    completed: 0,
+    partialErrors: 0,
+  };
+
+  const processPayload = async (payload: PipelinePayload) => {
+    const text = payload.raw_text.trim();
+    if (!text) {
+      backfillResults.skippedEmpty += 1;
+      return;
+    }
+
+    backfillResults.attempted += 1;
+    const result = await runPipeline(payload);
+
+    if (result.skipped) {
+      backfillResults.skippedByPipeline += 1;
+      return;
+    }
+
+    backfillResults.completed += 1;
+    if (result.error) {
+      backfillResults.partialErrors += 1;
+    }
+  };
+
+  const seededSlackMessages = await prisma.slackMessage.findMany({
+    select: {
+      channelId: true,
+      ts: true,
+      text: true,
+      slackUserId: true,
+      createdAt: true,
+    },
+  });
+
+  for (const msg of seededSlackMessages) {
+    const tsFloat = Number.parseFloat(msg.ts);
+    const timestamp = Number.isFinite(tsFloat)
+      ? new Date(tsFloat * 1000).toISOString()
+      : msg.createdAt.toISOString();
+
+    await processPayload({
+      source_id: `slack_${msg.channelId}_${msg.ts}`,
+      source_type: "slack",
+      raw_text: msg.text,
+      metadata: {
+        author: msg.slackUserId,
+        timestamp,
+        channel: msg.channelId,
+      },
+    });
+  }
+
+  const seededGmailMessages = await prisma.gmailMessage.findMany({
+    select: {
+      gmailMessageId: true,
+      bodyText: true,
+      snippet: true,
+      from: true,
+      date: true,
+      subject: true,
+      createdAt: true,
+    },
+  });
+
+  for (const mail of seededGmailMessages) {
+    await processPayload({
+      source_id: `gmail_${mail.gmailMessageId}`,
+      source_type: "gmail",
+      raw_text: (mail.bodyText ?? mail.snippet ?? "").trim(),
+      metadata: {
+        author: mail.from ?? undefined,
+        timestamp: mail.date
+          ? toIsoFromDateHeader(mail.date)
+          : mail.createdAt.toISOString(),
+        subject: mail.subject ?? undefined,
+      },
+    });
+  }
+
+  const seededDriveExtractions = await prisma.driveExtraction.findMany({
+    select: {
+      id: true,
+      extractedText: true,
+      displayName: true,
+      user: {
+        select: {
+          auth0Sub: true,
+          email: true,
+        },
+      },
+      createdAt: true,
+    },
+  });
+
+  for (const doc of seededDriveExtractions) {
+    await processPayload({
+      source_id: `drive_${doc.id}`,
+      source_type: "drive",
+      raw_text: doc.extractedText,
+      metadata: {
+        author: doc.user.email ?? doc.user.auth0Sub,
+        timestamp: doc.createdAt.toISOString(),
+        subject: doc.displayName,
+      },
+    });
+  }
+
+  console.log("✅ Pipeline backfill complete");
+  console.log(
+    `   attempted=${backfillResults.attempted}, completed=${backfillResults.completed}, skippedEmpty=${backfillResults.skippedEmpty}, skippedByPipeline=${backfillResults.skippedByPipeline}, partialErrors=${backfillResults.partialErrors}`,
+  );
 
   console.log("\n🎉 Seed complete!");
   console.log("──────────────────────────────────────────────────────");
