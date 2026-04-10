@@ -10,6 +10,7 @@ import DashboardPage from "./pages/DashboardPage";
 import DriveIngestPage from "./pages/DriveIngestPage";
 import MailPage from "./pages/MailPage";
 import ConnectorsPage from "./pages/ConnectorsPage";
+import RecallBotPage from "./pages/RecallBotPage";
 import LoginPage from "./pages/LoginPage";
 import RequireAuth from "./auth/RequireAuth";
 
@@ -64,6 +65,14 @@ const App: React.FC = () => {
           element={
             <RequireAuth>
               <ConnectorsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/dashboard/recall"
+          element={
+            <RequireAuth>
+              <RecallBotPage />
             </RequireAuth>
           }
         />

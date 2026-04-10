@@ -17,6 +17,9 @@ model User {
   updatedAt DateTime @updatedAt
 
   integrationCredentials IntegrationCredential[]
+  recallSettings         RecallBotSettings?
+  calendarConnections    CalendarConnection[]
+  meetings               Meeting[]
 }
 
 model IntegrationCredential {
@@ -45,4 +48,110 @@ model IntegrationCredential {
   @@unique([userId, provider])
   @@index([userId])
   @@map("integration_credentials")
+}
+
+// ── Recall Bot Tables ──────────────────────────────────────────────────────
+
+model RecallBotSettings {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  isEnabled        Boolean  @default(false) // User toggle to enable/disable auto-scheduling
+  lastSyncedAt     DateTime? // Last successful calendar poll
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId])
+  @@map("recall_bot_settings")
+}
+
+model CalendarConnection {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  calendarId     String   @unique // Google calendar ID
+  calendarEmail  String   // Email associated with the calendar
+  refreshTokenEnc String  // Encrypted refresh token for calendar API
+  platform       String   @default("google") // 'google', 'outlook', etc.
+
+  recallCalendarId String? // Recall.ai calendar integration ID
+  isActive       Boolean  @default(true)
+  connectedAt    DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  meetings       Meeting[]
+
+  @@index([userId])
+  @@map("calendar_connections")
+}
+
+model Meeting {
+  id              String   @id @default(cuid())
+  eventId         String   // Google Calendar event ID
+  calendarId      String   // Reference to CalendarConnection.calendarId
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  calendar        CalendarConnection @relation(fields: [calendarId], references: [calendarId], onDelete: Cascade)
+
+  title           String?
+  meetingUrl      String?
+  platform        String?  // 'meet', 'zoom', 'teams', etc.
+
+  startTimeUtc    DateTime
+  endTimeUtc      DateTime
+
+  botId           String?  // Recall.ai bot ID
+  botStatus       String?  // 'scheduled', 'joining', 'joined', 'left', 'failed'
+  botStatusSubCode String? // Sub-status from Recall.ai
+
+  isDeleted       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  attendees       MeetingAttendee[]
+  transcripts     Transcript[]
+
+  @@unique([eventId, calendarId])
+  @@index([userId])
+  @@index([startTimeUtc])
+  @@index([botId])
+  @@map("meetings")
+}
+
+model MeetingAttendee {
+  id              String   @id @default(cuid())
+  meetingId       String
+  meeting         Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  attendeeEmail   String
+  isOrganizer     Boolean  @default(false)
+  responseStatus  String?  // 'accepted', 'tentative', 'declined', 'needsAction'
+
+  createdAt       DateTime @default(now())
+
+  @@unique([meetingId, attendeeEmail])
+  @@index([meetingId])
+  @@map("meeting_attendees")
+}
+
+model Transcript {
+  id                 String   @id @default(cuid())
+  meetingId          String
+  meeting            Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  botId              String   // Recall.ai bot ID
+  speaker            String?  // Speaker name
+  speakerId          String?  // Speaker ID from Recall
+  transcriptText     String   // The transcribed text chunk
+  startTranscriptTime DateTime // When this chunk started
+  endTranscriptTime   DateTime // When this chunk ended
+  createdAt          DateTime @default(now())
+
+  @@index([meetingId])
+  @@index([botId])
+  @@index([createdAt])
+  @@map("transcripts")
 }

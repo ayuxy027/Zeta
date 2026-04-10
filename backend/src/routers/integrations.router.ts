@@ -64,7 +64,7 @@ function getGoogleWorkspaceOAuth2Client() {
       "GOOGLE_WORKSPACE_CLIENT_ID and GOOGLE_WORKSPACE_CLIENT_SECRET are required.",
     );
   }
-  const redirectUri = `${getBackendBaseUrl()}/api/integrations/google-workspace/callback`;
+  const redirectUri = "http://localhost:3001/api/integrations/google-workspace/callback";
   const oauth2Client = new google.auth.OAuth2(
     clientId,
     clientSecret,
