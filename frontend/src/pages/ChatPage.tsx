@@ -926,6 +926,11 @@ const ChatPage: React.FC = () => {
     }
   };
 
+  React.useEffect(() => {
+    if (focusInspector !== 'visualize') return;
+    void loadVisualGraph();
+  }, [focusInspector]);
+
   const handlePdfSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -999,8 +1004,20 @@ const ChatPage: React.FC = () => {
         }];
       }
       setConversations((prev) => [...prev, uploadMessage]);
-      setFocusInspector('visualize');
-      void loadVisualGraph();
+
+      const guidanceId = `upload-guidance-${Date.now()}`;
+      setConversations((prev) => [
+        ...prev,
+        {
+          id: guidanceId,
+          role: 'assistant',
+          text: `Now ask directly about this file. Try: @drive summarize ${data.fileName ?? file.name} and list key decisions.`,
+          meta: 'Zeta · ready for questions',
+        },
+      ]);
+      setSelectedConnectors((prev) => (prev.includes('drive') ? prev : [...prev, 'drive']));
+      setDraft((prev) => (prev.trim() ? prev : '@drive '));
+      setTimeout(() => inputRef.current?.focus(), 0);
       const warnings = data.warnings ?? [];
       if (warnings.length > 0) {
         const warningId = `upload-warning-${Date.now()}`;
