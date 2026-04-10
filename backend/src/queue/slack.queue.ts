@@ -24,9 +24,7 @@ let slackQueue: Queue | null = null;
 
 try {
   const conn = redisConnectionFromUrl(config.redisUrl);
-  slackQueue = new Queue('slack-events', {
-    connection: conn,
-  });
+  slackQueue = new Queue('slack-events', { connection: conn });
   console.log('[slack] BullMQ queue connected to Redis at', `${conn.host}:${conn.port}`);
 } catch (error) {
   console.warn('[slack] Redis not available, Slack queue disabled:', error);

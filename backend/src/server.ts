@@ -5,18 +5,12 @@ import oidc from 'express-openid-connect';
 import slackRouter from './routers/slack.router.js';
 import { initDb } from './db/pool.js';
 import { createDriveIngestRouter } from './routes/driveIngest.js';
+import { startSlackWorker } from './workers/slack.worker.js';
 
-const port = Number(process.env.PORT ?? 3001);
-const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 const { auth, requiresAuth } = oidc;
 
-const getRequiredEnv = (name: string): string => {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-};
+const port = Number(process.env.PORT ?? 3000);
+const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 
 const app = express();
 
@@ -32,27 +26,38 @@ app.use(express.json());
 // Slack webhook endpoint (no auth required - must be before auth middleware)
 app.use('/slack', slackRouter);
 
-app.use(
-  auth({
-    authRequired: false,
-    issuerBaseURL: getRequiredEnv('AUTH0_ISSUER_BASE_URL'),
-    baseURL: getRequiredEnv('AUTH0_BASE_URL'),
-    clientID: getRequiredEnv('AUTH0_CLIENT_ID'),
-    clientSecret: getRequiredEnv('AUTH0_CLIENT_SECRET'),
-    secret: getRequiredEnv('AUTH0_SECRET'),
-    // Must match Auth0 Application → Advanced → OAuth → JWT Signature Algorithm (RS256 vs HS256).
-    idTokenSigningAlg: process.env.AUTH0_ID_TOKEN_SIGNING_ALG?.trim() || 'RS256',
-    authorizationParams: {
-      response_type: 'code',
-      scope: 'openid profile email offline_access',
-    },
-    routes: {
-      login: '/auth/login',
-      logout: '/auth/logout',
-      callback: '/auth/callback',
-    },
-  }),
-);
+// Auth middleware (optional - only enabled if AUTH0 env vars are present)
+const auth0Issuer = process.env.AUTH0_ISSUER_BASE_URL?.trim();
+const auth0BaseURL = process.env.AUTH0_BASE_URL?.trim();
+const auth0ClientID = process.env.AUTH0_CLIENT_ID?.trim();
+const auth0ClientSecret = process.env.AUTH0_CLIENT_SECRET?.trim();
+const auth0Secret = process.env.AUTH0_SECRET?.trim();
+
+if (auth0Issuer && auth0BaseURL && auth0ClientID && auth0ClientSecret && auth0Secret) {
+  app.use(
+    auth({
+      authRequired: false,
+      issuerBaseURL: auth0Issuer,
+      baseURL: auth0BaseURL,
+      clientID: auth0ClientID,
+      clientSecret: auth0ClientSecret,
+      secret: auth0Secret,
+      idTokenSigningAlg: process.env.AUTH0_ID_TOKEN_SIGNING_ALG?.trim() || 'RS256',
+      authorizationParams: {
+        response_type: 'code',
+        scope: 'openid profile email offline_access',
+      },
+      routes: {
+        login: '/auth/login',
+        logout: '/auth/logout',
+        callback: '/auth/callback',
+      },
+    }),
+  );
+  console.log('Auth0 middleware enabled');
+} else {
+  console.warn('Auth0 middleware disabled - missing environment variables');
+}
 
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ ok: true, service: 'zeta-backend' });
@@ -86,6 +91,7 @@ async function start() {
   await initDb();
   app.listen(port, () => {
     console.log(`Zeta backend listening on http://localhost:${port}`);
+    startSlackWorker();
   });
 }
 
