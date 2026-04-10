@@ -1,10 +1,19 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express, { type Request, type Response } from 'express';
-import { auth, requiresAuth } from 'express-openid-connect';
+import oidc from 'express-openid-connect';
 
 const port = Number(process.env.PORT ?? 3001);
 const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+const { auth, requiresAuth } = oidc;
+
+const getRequiredEnv = (name: string): string => {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+};
 
 const app = express();
 
@@ -20,11 +29,11 @@ app.use(express.json());
 app.use(
   auth({
     authRequired: false,
-    issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL ?? '',
-    baseURL: process.env.AUTH0_BASE_URL ?? `http://localhost:${port}`,
-    clientID: process.env.AUTH0_CLIENT_ID ?? '',
-    clientSecret: process.env.AUTH0_CLIENT_SECRET ?? '',
-    secret: process.env.AUTH0_SECRET ?? '',
+    issuerBaseURL: getRequiredEnv('AUTH0_ISSUER_BASE_URL'),
+    baseURL: getRequiredEnv('AUTH0_BASE_URL'),
+    clientID: getRequiredEnv('AUTH0_CLIENT_ID'),
+    clientSecret: getRequiredEnv('AUTH0_CLIENT_SECRET'),
+    secret: getRequiredEnv('AUTH0_SECRET'),
     authorizationParams: {
       response_type: 'code',
       scope: 'openid profile email offline_access',
