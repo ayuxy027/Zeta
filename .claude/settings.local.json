@@ -47,7 +47,9 @@
       "Bash(awk:*)",
       "Bash(tasklist)",
       "Bash(taskkill:*)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(node -e \"const c = require\\('./node_modules/chromadb/dist/cjs/index.js'\\); console.log\\(Object.keys\\(c\\)\\)\")",
+      "Bash(cat D:/Coding/Zeta/backend/prisma/migrations/*/migration.sql)"
     ]
   }
 }

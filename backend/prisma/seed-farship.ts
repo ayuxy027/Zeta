@@ -2292,7 +2292,7 @@ async function main(): Promise<void> {
 
   // ── 2. Clear ChromaDB ───────────────────────────────────────────────────────
   console.log("\n[2/5] Clearing ChromaDB…");
-  const chroma = new ChromaClient({ path: process.env.CHROMA_URL ?? "http://localhost:8000" });
+  const chroma = new ChromaClient({ path: process.env.CHROMADB_URL ?? "http://localhost:8000" });
   try { await chroma.deleteCollection({ name: "zeta_knowledge" }); } catch { /* doesn't exist yet */ }
   const collection = await chroma.createCollection({ name: "zeta_knowledge" });
   console.log("  ✓ ChromaDB collection recreated");
