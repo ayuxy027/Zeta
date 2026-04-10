@@ -454,13 +454,15 @@ Question: ${question}`,
   const cleanedAnswer = answer
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .trim();
+  const evidenceSummary = `Reviewed ${chunks.length} source snippet${chunks.length === 1 ? "" : "s"}${graphContext ? " plus graph relationships" : " without graph augmentation"}.`;
   const davidThinking =
-    "David validated evidence coverage, extracted key decisions, and handed structured rationale to Sandy.";
+    extractedThinking ||
+    thinking ||
+    `${evidenceSummary} Extracted decision candidates, checked consistency across channels, and prepared a structured handoff with confidence cues.`;
   const davidDecisions = extractDavidDecisions(graphContext, chunks);
   const sandyDetailed = cleanedAnswer || answer;
   const sandyConcise = finalizeConciseAnswer(sandyDetailed, sandyDetailed);
-  const sandyThinking =
-    "Converted David's evidence graph into an executive-ready answer with source citations.";
+  const sandyThinking = `Translated David's analysis into an executive narrative, prioritized the strongest evidence first, and mapped key claims to [Source N] citations for auditability.`;
 
   if (!sandyDetailed.trim()) {
     return buildFallbackResult("empty_generation", question, chunks);

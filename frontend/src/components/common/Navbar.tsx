@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Mic } from "lucide-react";
+import { ChevronRight, Mic, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useAuth } from "../../auth/useAuth";
 
 const Navbar: React.FC = () => {
@@ -8,7 +8,9 @@ const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
   const { user, isAuthenticated, isLoading, login, logout } = useAuth();
+  const isChatRoute = location.pathname === "/dashboard/chat";
 
   const navItems = [
     { path: "/dashboard", label: "Dashboard" },
@@ -19,10 +21,109 @@ const Navbar: React.FC = () => {
 
   const toggleMenu = () => setIsMenuOpen((value) => !value);
   const closeMenu = () => setIsMenuOpen(false);
+
+  useEffect(() => {
+    setIsChatSidebarOpen(false);
+  }, [location.pathname]);
+
   const getUserInitial = () => {
     const value = user?.name || user?.email || "U";
     return value.charAt(0).toUpperCase();
   };
+
+  if (isChatRoute) {
+    return (
+      <>
+        <div className="fixed left-4 sm:left-5 top-1/2 -translate-y-1/2 z-[70]">
+          <button
+            type="button"
+            onClick={() => setIsChatSidebarOpen((value) => !value)}
+            className="w-12 h-12 rounded-2xl bg-white/95 backdrop-blur border border-gray-200 shadow-[0_18px_40px_-25px_rgba(15,23,42,0.6)] text-vintage-black inline-flex items-center justify-center hover:-translate-y-0.5 transition"
+            aria-label={isChatSidebarOpen ? "Close navigation" : "Open navigation"}
+          >
+            {isChatSidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          </button>
+        </div>
+
+        <aside
+          className={`fixed left-4 sm:left-5 top-1/2 -translate-y-1/2 z-[65] w-[284px] sm:w-[320px] h-[360px] sm:h-[390px] rounded-[38px] border border-gray-200 bg-white/96 backdrop-blur-xl shadow-[0_40px_90px_-45px_rgba(15,23,42,0.75)] p-4 flex flex-col transition-all duration-300 ${
+            isChatSidebarOpen
+              ? "translate-x-0 opacity-100 pointer-events-auto"
+              : "-translate-x-[115%] opacity-0 pointer-events-none"
+          }`}
+          aria-hidden={!isChatSidebarOpen}
+        >
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => navigate("/")}
+              className="inline-flex items-center gap-2 rounded-2xl px-2 py-1 hover:bg-gray-50 transition"
+            >
+              <span className="w-8 h-8 rounded-xl bg-vintage-black text-white inline-flex items-center justify-center">
+                <Mic className="w-4 h-4" />
+              </span>
+              <span className="text-sm font-semibold text-vintage-black">Zeta</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsChatSidebarOpen(false)}
+              className="w-8 h-8 rounded-xl border border-gray-200 text-vintage-gray-700 inline-flex items-center justify-center hover:bg-gray-50 transition"
+              aria-label="Collapse navigation"
+            >
+              <PanelLeftOpen className="w-4 h-4" />
+            </button>
+          </div>
+
+          <nav className="mt-4 grid gap-2">
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <button
+                  key={item.path}
+                  onClick={() => navigate(item.path)}
+                  className={`w-full rounded-2xl px-3 py-2.5 text-sm flex items-center justify-between transition ${
+                    isActive
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-50 text-vintage-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
+                  }`}
+                >
+                  <span>{item.label}</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="mt-auto rounded-2xl border border-gray-200 bg-gray-50 p-3">
+            {isLoading ? (
+              <p className="text-xs text-vintage-gray-500">Loading...</p>
+            ) : isAuthenticated ? (
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-vintage-black truncate">
+                    {user?.name ?? user?.email ?? "Signed in"}
+                  </p>
+                  <p className="text-[11px] text-vintage-gray-500">Workspace active</p>
+                </div>
+                <button
+                  onClick={() => logout("/")}
+                  className="text-xs px-3 py-1.5 rounded-full bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 transition"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <button
+                className="w-full rounded-full bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700 transition"
+                onClick={() => login("/dashboard")}
+              >
+                Sign in
+              </button>
+            )}
+          </div>
+        </aside>
+      </>
+    );
+  }
 
   return (
     <header className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex items-center justify-between px-6 py-3 md:py-4 shadow-lg rounded-full bg-white/95 backdrop-blur-sm border border-gray-100/50 w-[calc(100%-2rem)] max-w-5xl">

@@ -20,8 +20,11 @@ const ScrollToTop: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  const location = useLocation();
+  const isChatRoute = location.pathname === "/dashboard/chat";
+
   return (
-    <div className="min-h-screen bg-vintage-white pt-20">
+    <div className={`min-h-screen bg-vintage-white ${isChatRoute ? "pt-0" : "pt-20"}`}>
       <ScrollToTop />
       <Navbar />
       <Routes>
