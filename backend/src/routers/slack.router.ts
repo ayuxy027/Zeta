@@ -6,19 +6,29 @@ import type { SlackEvent } from '../types/slack.types.js';
 
 const router = Router();
 
-// Verify Slack signature
-function verifySlackSignature(timestamp: string, signature: string, body: string): boolean {
+// Verify Slack signature against the raw request body (not re-serialized JSON)
+function verifySlackSignature(timestamp: string, signature: string, rawBody: string): boolean {
   if (config.nodeEnv === 'development') {
-    // Skip signature verification in development
     return true;
   }
 
+  // Reject requests older than 5 minutes to prevent replay attacks
+  const fiveMinutesAgo = Math.floor(Date.now() / 1000) - 60 * 5;
+  if (parseInt(timestamp, 10) < fiveMinutesAgo) {
+    return false;
+  }
+
   const hmac = createHmac('sha256', config.slackSigningSecret);
-  const baseString = `v0:${timestamp}:${body}`;
-  hmac.update(baseString);
-  const computedSignature = `v0=${hmac.digest('hex')}`;
-  
-  return signature === computedSignature;
+  hmac.update(`v0:${timestamp}:${rawBody}`);
+  const computed = `v0=${hmac.digest('hex')}`;
+
+  // Constant-time comparison to prevent timing attacks
+  if (computed.length !== signature.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < computed.length; i++) {
+    mismatch |= computed.charCodeAt(i) ^ signature.charCodeAt(i);
+  }
+  return mismatch === 0;
 }
 
 // POST /slack/events - Main webhook endpoint
@@ -35,9 +45,10 @@ router.post('/events', async (req: Request, res: Response) => {
   if (body.type === 'event_callback' && body.event_id && body.event) {
     const timestamp = req.headers['x-slack-request-timestamp'] as string;
     const signature = req.headers['x-slack-signature'] as string;
-    
-    // Verify signature
-    if (!verifySlackSignature(timestamp, signature, JSON.stringify(body))) {
+    const rawBody = (req as unknown as Record<string, unknown>).rawBody as string ?? '';
+
+    // Verify signature against original raw body bytes
+    if (!verifySlackSignature(timestamp, signature, rawBody)) {
       console.error('Invalid Slack signature');
       return res.status(401).json({ error: 'Invalid signature' });
     }

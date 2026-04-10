@@ -135,7 +135,13 @@ app.use(
   }),
 );
 
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as unknown as Record<string, unknown>).rawBody = buf.toString("utf8");
+    },
+  }),
+);
 
 // Slack webhook endpoint (no auth required - must be before auth middleware)
 app.use("/slack", slackRouter);

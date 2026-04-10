@@ -33,7 +33,14 @@
       "Bash(python3 -c ':*)",
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\);r.results.forEach\\(\\(res,i\\)=>{console.log\\('Result',i,':',JSON.stringify\\(res.data.slice\\(0,5\\)\\)}\\)}\\)}\")",
       "Bash(npm uninstall:*)",
-      "Bash(npm ci:*)"
+      "Bash(npm ci:*)",
+      "Bash(node_modules/.bin/tsc --noEmit -p tsconfig.json)",
+      "Bash(bash demo.sh --check)",
+      "Bash(bash -n demo.sh)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(grep -r \"vintage\" D:/Coding/Zeta/frontend/tailwind.config*)",
+      "Bash(ls D:/Coding/Zeta/frontend/src/*.css)",
+      "Bash(grep -rn \"theme\" D:/Coding/Zeta/frontend/vite.config*)"
     ]
   }
 }
