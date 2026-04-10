@@ -34,6 +34,8 @@ app.use(
     clientID: getRequiredEnv('AUTH0_CLIENT_ID'),
     clientSecret: getRequiredEnv('AUTH0_CLIENT_SECRET'),
     secret: getRequiredEnv('AUTH0_SECRET'),
+    // Must match Auth0 Application → Advanced → OAuth → JWT Signature Algorithm (RS256 vs HS256).
+    idTokenSigningAlg: process.env.AUTH0_ID_TOKEN_SIGNING_ALG?.trim() || 'RS256',
     authorizationParams: {
       response_type: 'code',
       scope: 'openid profile email offline_access',
