@@ -139,6 +139,7 @@ model RecallBotSettings {
   userId       String    @unique
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   isEnabled    Boolean   @default(false)
+  mode         String    @default("manual")
   lastSyncedAt DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

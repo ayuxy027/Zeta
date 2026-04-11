@@ -14,6 +14,7 @@ import { createQueryRouter } from "./routes/query.js";
 import { createRecallRouter } from "./routers/recall.router.js";
 import recallWebhooksRouter from "./routers/recallWebhooks.router.js";
 import { startSlackWorker } from "./workers/slack.worker.js";
+import { startCalendarSync } from "./services/calendarSync.js";
 
 const port = Number(process.env.PORT ?? 3001);
 const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
@@ -142,7 +143,8 @@ app.use(
   express.json({
     limit: "300mb",
     verify: (req, _res, buf) => {
-      (req as unknown as Record<string, unknown>).rawBody = buf.toString("utf8");
+      (req as unknown as Record<string, unknown>).rawBody =
+        buf.toString("utf8");
     },
   }),
 );
@@ -267,17 +269,34 @@ app.use("/api/recall", createRecallRouter());
 
 async function start() {
   await initDb();
-  await initNeo4j();
+  const neo4jEnabled = process.env.NEO4J_ENABLED !== "false";
+  if (neo4jEnabled) {
+    try {
+      await initNeo4j();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(
+        "[neo4j] Connection failed; continuing without graph initialization:",
+        message,
+      );
+    }
+  } else {
+    console.log("[neo4j] Graph initialization disabled by NEO4J_ENABLED=false");
+  }
   try {
     await ensureChromaCollection();
     console.log("[chroma] Collection is ready");
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn("[chroma] Collection warmup failed; retrying lazily on query:", message);
+    console.warn(
+      "[chroma] Collection warmup failed; retrying lazily on query:",
+      message,
+    );
   }
   app.listen(port, () => {
     console.log(`Zeta backend listening on http://localhost:${port}`);
     startSlackWorker();
+    startCalendarSync();
   });
 }
 
