@@ -285,32 +285,23 @@ export function createRecallRouter() {
         orderBy: { startTimeUtc: "asc" },
       });
 
-      await refreshBotStatuses(
+      const payload = meetings.map((m) => ({
+        id: m.id,
+        title: m.title,
+        meetingUrl: m.meetingUrl,
+        platform: m.platform,
+        startTimeUtc: m.startTimeUtc,
+        endTimeUtc: m.endTimeUtc,
+        botId: m.botId,
+        botStatus: m.botStatus,
+        attendees: m.attendees,
+      }));
+
+      res.json(payload);
+
+      // Refresh statuses asynchronously so API response stays fast.
+      void refreshBotStatuses(
         meetings.map((m) => ({ id: m.id, botId: m.botId })),
-      );
-
-      const meetingsRefreshed = await prisma.meeting.findMany({
-        where: {
-          userId,
-          startTimeUtc: { gte: now, lte: dayLater },
-          isDeleted: false,
-        },
-        include: { attendees: true },
-        orderBy: { startTimeUtc: "asc" },
-      });
-
-      res.json(
-        meetingsRefreshed.map((m) => ({
-          id: m.id,
-          title: m.title,
-          meetingUrl: m.meetingUrl,
-          platform: m.platform,
-          startTimeUtc: m.startTimeUtc,
-          endTimeUtc: m.endTimeUtc,
-          botId: m.botId,
-          botStatus: m.botStatus,
-          attendees: m.attendees,
-        })),
       );
     },
   );
@@ -376,36 +367,23 @@ export function createRecallRouter() {
         take: 50,
       });
 
-      await refreshBotStatuses(
+      const payload = meetings.map((m) => ({
+        id: m.id,
+        title: m.title,
+        meetingUrl: m.meetingUrl,
+        platform: m.platform,
+        startTimeUtc: m.startTimeUtc,
+        endTimeUtc: m.endTimeUtc,
+        botId: m.botId,
+        botStatus: m.botStatus,
+        transcriptCount: m.transcripts.length,
+      }));
+
+      res.json(payload);
+
+      // Refresh statuses asynchronously so API response stays fast.
+      void refreshBotStatuses(
         meetings.map((m) => ({ id: m.id, botId: m.botId })),
-      );
-
-      const meetingsRefreshed = await prisma.meeting.findMany({
-        where: {
-          userId,
-          isDeleted: false,
-          OR: [
-            { endTimeUtc: { lte: new Date() } },
-            { botStatus: { in: ["left", "completed", "failed"] } },
-          ],
-        },
-        include: { transcripts: { select: { id: true } } },
-        orderBy: { startTimeUtc: "desc" },
-        take: 50,
-      });
-
-      res.json(
-        meetingsRefreshed.map((m) => ({
-          id: m.id,
-          title: m.title,
-          meetingUrl: m.meetingUrl,
-          platform: m.platform,
-          startTimeUtc: m.startTimeUtc,
-          endTimeUtc: m.endTimeUtc,
-          botId: m.botId,
-          botStatus: m.botStatus,
-          transcriptCount: m.transcripts.length,
-        })),
       );
     },
   );

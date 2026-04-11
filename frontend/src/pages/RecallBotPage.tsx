@@ -38,6 +38,7 @@ const RecallBotPage: React.FC = () => {
     string | null
   >(null);
   const [loading, setLoading] = React.useState(true);
+  const [meetingsLoading, setMeetingsLoading] = React.useState(false);
   const [syncing, setSyncing] = React.useState(false);
   const [toggling, setToggling] = React.useState(false);
   const [sendingMeetingId, setSendingMeetingId] = React.useState<string | null>(
@@ -88,24 +89,32 @@ const RecallBotPage: React.FC = () => {
         setSettings(normalizedSettings);
         setCalendarStatus(normalizedCalendarStatus);
 
+        if (!background) {
+          setLoading(false);
+        }
+
         if (
           normalizedSettings.isEnabled &&
           normalizedCalendarStatus.connected
         ) {
+          setMeetingsLoading(true);
           const [u, h] = await Promise.all([
             fetchUpcomingMeetings().catch(() => []),
             fetchMeetingHistory().catch(() => []),
           ]);
           setUpcomingMeetings(u as Meeting[]);
           setMeetingHistory(h as Meeting[]);
+          setMeetingsLoading(false);
         } else {
           setUpcomingMeetings([]);
           setMeetingHistory([]);
+          setMeetingsLoading(false);
         }
       } catch (e) {
         if (!background) {
           setError(e instanceof Error ? e.message : "Failed to load data");
         }
+        setMeetingsLoading(false);
       } finally {
         if (!background) {
           setLoading(false);
@@ -298,8 +307,8 @@ const RecallBotPage: React.FC = () => {
 
   if (loading)
     return (
-      <div className="min-h-screen bg-zinc-50 pt-20">
-        <div className="max-w-6xl mx-auto p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-vintage-white pt-20 pb-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-center py-10">
           <Loader2 className="w-8 h-8 animate-spin text-zinc-500" />
         </div>
       </div>
@@ -309,28 +318,27 @@ const RecallBotPage: React.FC = () => {
   const isEnabled = !!settings?.isEnabled;
   const isAutomation = settings?.mode === "automation";
 
-  const premiumCard =
-    "rounded-[28px] border border-zinc-200/80 bg-white/95 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_36px_rgba(16,24,40,0.08)]";
+  const premiumCard = "rounded-xl border border-gray-200 bg-white";
   const actionPrimary =
-    "inline-flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-black hover:shadow-[0_8px_18px_rgba(0,0,0,0.24)] disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50";
   const actionSecondary =
-    "inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-400 hover:bg-zinc-50 hover:shadow-[0_8px_18px_rgba(15,23,42,0.08)] disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-vintage-black transition-colors hover:border-indigo-300 hover:bg-indigo-50/30 disabled:cursor-not-allowed disabled:opacity-50";
 
   return (
-    <div className="min-h-screen bg-white pt-20 pb-10">
-      <div className="mx-auto max-w-7xl px-5 lg:px-8 space-y-6">
-        <header className="rounded-[30px] border border-zinc-200/80 bg-white/90 px-6 py-6 shadow-[0_8px_34px_rgba(2,6,23,0.08)] backdrop-blur-sm sm:px-8 sm:py-7">
+    <div className="min-h-screen bg-vintage-white pt-20 pb-12">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 space-y-6">
+        <header className="rounded-xl border border-gray-200 bg-white px-5 py-5 sm:px-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
-                Meeting Intelligence
+              <p className="text-xs text-vintage-gray-500">
+                Meeting Intelligence Workspace
               </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-900 sm:text-4xl">
+              <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-vintage-black">
                 Recall
               </h1>
-              <p className="mt-2 max-w-2xl text-sm text-zinc-600 sm:text-base">
-                Premium workspace for automated bot joins, transcript capture,
-                and meeting recall operations.
+              <p className="mt-1 text-sm text-vintage-gray-500">
+                Control bot joins, transcript capture, and meeting operations in
+                one dashboard.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -352,19 +360,19 @@ const RecallBotPage: React.FC = () => {
         </header>
 
         {banner && (
-          <div className="animate-fade-up rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 shadow-[0_6px_16px_rgba(15,23,42,0.08)]">
+          <div className="animate-fade-up rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-vintage-black">
             <div className="flex items-center justify-between gap-3">
               <div className="inline-flex items-center gap-2">
                 {banner.type === "success" ? (
-                  <CheckCircle2 className="h-4 w-4 text-zinc-700" />
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 ) : (
-                  <XCircle className="h-4 w-4 text-zinc-700" />
+                  <XCircle className="h-4 w-4 text-red-600" />
                 )}
                 {banner.message}
               </div>
               <button
                 type="button"
-                className="text-xs font-medium text-zinc-500 underline-offset-4 hover:text-zinc-700 hover:underline"
+                className="text-xs font-medium text-vintage-gray-500 underline-offset-4 hover:text-vintage-black hover:underline"
                 onClick={() => setBanner(null)}
               >
                 Dismiss
@@ -373,33 +381,33 @@ const RecallBotPage: React.FC = () => {
           </div>
         )}
         {error && (
-          <div className="animate-fade-up rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 shadow-[0_6px_16px_rgba(15,23,42,0.08)]">
+          <div className="animate-fade-up rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
           <aside className="space-y-6 xl:sticky xl:top-24 xl:self-start">
-            <section className={`${premiumCard} p-6 space-y-5`}>
+            <section className={`${premiumCard} p-5 space-y-5`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-semibold text-zinc-900">
+                  <h2 className="text-base font-semibold text-vintage-black">
                     Workspace Status
                   </h2>
-                  <p className="mt-1 text-sm text-zinc-600">
+                  <p className="mt-1 text-sm text-vintage-gray-500">
                     Connection and Recall controls.
                   </p>
                 </div>
                 <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${isConnected ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600"}`}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${isConnected ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-vintage-gray-500"}`}
                 >
                   {isConnected ? "Connected" : "Disconnected"}
                 </span>
               </div>
 
               {!isConnected ? (
-                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 space-y-4">
-                  <p className="text-sm text-zinc-600">
+                <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-4 space-y-4">
+                  <p className="text-sm text-vintage-gray-500">
                     Connect Google Workspace before using Recall automation.
                   </p>
                   <a href="/connectors" className={actionPrimary}>
@@ -409,13 +417,13 @@ const RecallBotPage: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <div className="rounded-2xl border border-zinc-200 p-4">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50/40 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-zinc-900">
+                        <p className="text-sm font-semibold text-vintage-black">
                           Recall Engine
                         </p>
-                        <p className="mt-1 text-xs text-zinc-500">
+                        <p className="mt-1 text-xs text-vintage-gray-500">
                           {calendarStatus?.calendarEmail ??
                             "Workspace connected"}
                         </p>
@@ -424,7 +432,7 @@ const RecallBotPage: React.FC = () => {
                         type="button"
                         onClick={() => void handleToggleRecall()}
                         disabled={toggling}
-                        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${isEnabled ? "bg-zinc-900" : "bg-zinc-300"} ${toggling ? "opacity-60" : "hover:scale-[1.02]"}`}
+                        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${isEnabled ? "bg-indigo-600" : "bg-zinc-300"} ${toggling ? "opacity-60" : "hover:scale-[1.02]"}`}
                       >
                         <span
                           className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${isEnabled ? "translate-x-6" : "translate-x-1"}`}
@@ -434,16 +442,16 @@ const RecallBotPage: React.FC = () => {
                   </div>
 
                   {isEnabled && (
-                    <div className="animate-fade-up rounded-2xl border border-zinc-200 p-4 space-y-3">
-                      <h3 className="text-sm font-semibold text-zinc-900">
+                    <div className="animate-fade-up rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+                      <h3 className="text-sm font-semibold text-vintage-black">
                         Mode
                       </h3>
-                      <div className="grid grid-cols-2 gap-2 rounded-xl bg-zinc-100 p-1">
+                      <div className="grid grid-cols-2 gap-2 rounded-lg bg-gray-100 p-1">
                         <button
                           type="button"
                           onClick={() => void handleModeChange("manual")}
                           disabled={toggling}
-                          className={`rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 ${settings?.mode === "manual" ? "bg-white text-zinc-900 shadow-[0_3px_10px_rgba(15,23,42,0.08)]" : "text-zinc-600 hover:text-zinc-800"}`}
+                          className={`rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ${settings?.mode === "manual" ? "bg-white text-vintage-black shadow-sm" : "text-vintage-gray-500 hover:text-vintage-black"}`}
                         >
                           Manual
                         </button>
@@ -451,12 +459,12 @@ const RecallBotPage: React.FC = () => {
                           type="button"
                           onClick={() => void handleModeChange("automation")}
                           disabled={toggling}
-                          className={`rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 ${settings?.mode === "automation" ? "bg-white text-zinc-900 shadow-[0_3px_10px_rgba(15,23,42,0.08)]" : "text-zinc-600 hover:text-zinc-800"}`}
+                          className={`rounded-md px-3 py-2 text-sm font-medium transition-all duration-200 ${settings?.mode === "automation" ? "bg-white text-vintage-black shadow-sm" : "text-vintage-gray-500 hover:text-vintage-black"}`}
                         >
                           Automation
                         </button>
                       </div>
-                      <p className="text-xs leading-relaxed text-zinc-500">
+                      <p className="text-xs leading-relaxed text-vintage-gray-500">
                         Automation joins meetings that are about to start and
                         syncs transcripts automatically. Manual gives you full
                         control.
@@ -471,17 +479,24 @@ const RecallBotPage: React.FC = () => {
           <main className="space-y-6">
             {isConnected && isEnabled && (
               <>
-                <section className={`${premiumCard} p-6 sm:p-7`}>
+                <section
+                  className={`${premiumCard} p-5 hover:shadow-md transition-shadow`}
+                >
                   <div className="mb-5 flex items-center justify-between">
-                    <h2 className="text-xl font-semibold text-zinc-900">
+                    <h2 className="text-base font-semibold text-vintage-black">
                       Upcoming Meetings
                     </h2>
-                    <span className="text-xs font-medium text-zinc-500">
+                    <span className="text-xs text-vintage-gray-500">
                       Next 24 hours
                     </span>
                   </div>
-                  {upcomingMeetings.length === 0 ? (
-                    <p className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm text-zinc-500">
+                  {meetingsLoading ? (
+                    <p className="rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-4 text-sm text-vintage-gray-500 inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading meetings...
+                    </p>
+                  ) : upcomingMeetings.length === 0 ? (
+                    <p className="rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-4 text-sm text-vintage-gray-500">
                       No upcoming meetings found.
                     </p>
                   ) : (
@@ -489,18 +504,18 @@ const RecallBotPage: React.FC = () => {
                       {upcomingMeetings.map((m) => (
                         <article
                           key={m.id}
-                          className="group rounded-2xl border border-zinc-200 bg-white px-4 py-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]"
+                          className="group rounded-xl border border-gray-200 bg-white px-4 py-4 transition hover:shadow-md"
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="space-y-2">
-                              <div className="inline-flex items-center gap-2 rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-600">
+                              <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-vintage-gray-500">
                                 <Video className="h-3.5 w-3.5" />
                                 {getPlatformIcon(m.platform)}
                               </div>
-                              <h3 className="text-base font-semibold text-zinc-900">
+                              <h3 className="text-base font-semibold text-vintage-black">
                                 {m.title ?? "Untitled Meeting"}
                               </h3>
-                              <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-500">
+                              <div className="flex flex-wrap items-center gap-4 text-sm text-vintage-gray-500">
                                 <span className="inline-flex items-center gap-1.5">
                                   <Clock className="h-3.5 w-3.5" />
                                   {formatDate(m.startTimeUtc)}{" "}
@@ -529,7 +544,7 @@ const RecallBotPage: React.FC = () => {
                                 href={m.meetingUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 rounded-full border border-zinc-300 px-3.5 py-1.5 text-xs font-semibold text-zinc-700 transition-all duration-200 hover:border-zinc-500 hover:text-zinc-900"
+                                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-vintage-black transition-colors hover:border-indigo-300 hover:bg-indigo-50/30"
                               >
                                 Open URL
                               </a>
@@ -560,17 +575,24 @@ const RecallBotPage: React.FC = () => {
                   )}
                 </section>
 
-                <section className={`${premiumCard} p-6 sm:p-7`}>
+                <section
+                  className={`${premiumCard} p-5 hover:shadow-md transition-shadow`}
+                >
                   <div className="mb-5 flex items-center justify-between">
-                    <h2 className="text-xl font-semibold text-zinc-900">
+                    <h2 className="text-base font-semibold text-vintage-black">
                       Meeting History
                     </h2>
-                    <span className="text-xs font-medium text-zinc-500">
+                    <span className="text-xs text-vintage-gray-500">
                       Latest 50
                     </span>
                   </div>
-                  {meetingHistory.length === 0 ? (
-                    <p className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm text-zinc-500">
+                  {meetingsLoading ? (
+                    <p className="rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-4 text-sm text-vintage-gray-500 inline-flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading history...
+                    </p>
+                  ) : meetingHistory.length === 0 ? (
+                    <p className="rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-4 text-sm text-vintage-gray-500">
                       Past meetings appear here after completion.
                     </p>
                   ) : (
@@ -578,18 +600,18 @@ const RecallBotPage: React.FC = () => {
                       {meetingHistory.map((m) => (
                         <article
                           key={m.id}
-                          className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]"
+                          className="rounded-xl border border-gray-200 bg-white px-4 py-4 transition hover:shadow-md"
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="space-y-2">
-                              <div className="inline-flex items-center gap-2 rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-600">
+                              <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-vintage-gray-500">
                                 <Video className="h-3.5 w-3.5" />
                                 {getPlatformIcon(m.platform)}
                               </div>
-                              <h3 className="text-base font-semibold text-zinc-900">
+                              <h3 className="text-base font-semibold text-vintage-black">
                                 {m.title ?? "Untitled Meeting"}
                               </h3>
-                              <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-500">
+                              <div className="flex flex-wrap items-center gap-4 text-sm text-vintage-gray-500">
                                 <span className="inline-flex items-center gap-1.5">
                                   <Clock className="h-3.5 w-3.5" />
                                   {formatDate(m.startTimeUtc)}{" "}
@@ -604,7 +626,7 @@ const RecallBotPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => void handleViewTranscripts(m.id)}
-                                className="inline-flex items-center rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-all duration-200 hover:border-zinc-500 hover:text-zinc-900"
+                                className="inline-flex items-center rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-vintage-black transition-colors hover:border-indigo-300 hover:bg-indigo-50/30"
                               >
                                 View Transcript
                               </button>
@@ -644,7 +666,7 @@ const RecallBotPage: React.FC = () => {
                     aria-label="Transcript"
                   >
                     <div className="mb-4 flex items-center justify-between">
-                      <h2 className="text-xl font-semibold text-zinc-900">
+                      <h2 className="text-base font-semibold text-vintage-black">
                         Transcript
                       </h2>
                       <button
@@ -653,37 +675,37 @@ const RecallBotPage: React.FC = () => {
                           setShowTranscriptPanel(false);
                           setSelectedMeetingId(null);
                         }}
-                        className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-500 hover:text-zinc-900"
+                        className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-vintage-gray-500 transition-colors hover:border-indigo-300 hover:bg-indigo-50/30 hover:text-vintage-black"
                       >
                         Close
                       </button>
                     </div>
                     <div className="max-h-[72vh] space-y-3 overflow-y-auto pr-1">
                       {transcriptLoading ? (
-                        <div className="flex items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-12 text-sm text-zinc-600">
+                        <div className="flex items-center justify-center rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-12 text-sm text-vintage-gray-500">
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Loading transcript...
                         </div>
                       ) : selectedMeetingTranscripts.length === 0 ? (
-                        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-6 text-sm text-zinc-600">
+                        <div className="rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-6 text-sm text-vintage-gray-500">
                           No transcript chunks found for this meeting.
                         </div>
                       ) : (
                         selectedMeetingTranscripts.map((c) => (
                           <article
                             key={c.id}
-                            className="rounded-2xl border border-zinc-200 bg-zinc-50/70 px-4 py-3"
+                            className="rounded-xl border border-gray-200 bg-gray-50/50 px-4 py-3"
                           >
                             <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                              <span className="text-sm font-semibold text-zinc-900">
+                              <span className="text-sm font-semibold text-vintage-black">
                                 {c.speaker ?? "Unknown"}
                               </span>
-                              <span className="text-xs text-zinc-500">
+                              <span className="text-xs text-vintage-gray-500">
                                 {formatTime(c.startTranscriptTime)} -{" "}
                                 {formatTime(c.endTranscriptTime)}
                               </span>
                             </div>
-                            <p className="text-sm leading-relaxed text-zinc-700">
+                            <p className="text-sm leading-relaxed text-vintage-gray-700">
                               {c.transcriptText}
                             </p>
                           </article>
