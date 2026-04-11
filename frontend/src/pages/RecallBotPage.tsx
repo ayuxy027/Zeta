@@ -61,7 +61,7 @@ const RecallBotPage: React.FC = () => {
       }
 
       try {
-        const [s, c, u, h] = await Promise.all([
+        const [s, c] = await Promise.all([
           fetchRecallSettings().catch(() => ({
             isEnabled: false,
             mode: "manual" as const,
@@ -73,20 +73,35 @@ const RecallBotPage: React.FC = () => {
             calendarEmail: null,
             platform: null,
           })),
-          fetchUpcomingMeetings().catch(() => []),
-          fetchMeetingHistory().catch(() => []),
         ]);
-        setSettings({
+
+        const normalizedSettings: RecallSettings = {
           isEnabled: (s as RecallSettings).isEnabled,
           mode:
             (s as RecallSettings).mode === "automation"
               ? "automation"
               : "manual",
           lastSyncedAt: (s as RecallSettings).lastSyncedAt,
-        });
-        setCalendarStatus(c as CalendarStatus);
-        setUpcomingMeetings(u as Meeting[]);
-        setMeetingHistory(h as Meeting[]);
+        };
+        const normalizedCalendarStatus = c as CalendarStatus;
+
+        setSettings(normalizedSettings);
+        setCalendarStatus(normalizedCalendarStatus);
+
+        if (
+          normalizedSettings.isEnabled &&
+          normalizedCalendarStatus.connected
+        ) {
+          const [u, h] = await Promise.all([
+            fetchUpcomingMeetings().catch(() => []),
+            fetchMeetingHistory().catch(() => []),
+          ]);
+          setUpcomingMeetings(u as Meeting[]);
+          setMeetingHistory(h as Meeting[]);
+        } else {
+          setUpcomingMeetings([]);
+          setMeetingHistory([]);
+        }
       } catch (e) {
         if (!background) {
           setError(e instanceof Error ? e.message : "Failed to load data");
@@ -311,7 +326,7 @@ const RecallBotPage: React.FC = () => {
                 Meeting Intelligence
               </p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-900 sm:text-4xl">
-                Recall Control Room
+                Recall
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-zinc-600 sm:text-base">
                 Premium workspace for automated bot joins, transcript capture,

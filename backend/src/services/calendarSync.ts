@@ -185,6 +185,15 @@ async function syncUserCalendar(userId: string) {
     return;
   }
 
+  const googleCredential = await prisma.integrationCredential.findUnique({
+    where: { userId_provider: { userId, provider: "google_workspace" } },
+    select: { isActive: true, refreshTokenEnc: true },
+  });
+
+  if (!googleCredential?.isActive || !googleCredential.refreshTokenEnc) {
+    return;
+  }
+
   const calendarConn = await prisma.calendarConnection.findFirst({
     where: { userId, isActive: true },
   });

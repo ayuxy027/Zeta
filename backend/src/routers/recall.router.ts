@@ -217,14 +217,25 @@ export function createRecallRouter() {
         return;
       }
 
+      const googleCredential = await prisma.integrationCredential.findUnique({
+        where: { userId_provider: { userId, provider: "google_workspace" } },
+      });
+
       const calendar = await prisma.calendarConnection.findFirst({
         where: { userId, isActive: true },
       });
+
+      const hasActiveGoogle =
+        !!googleCredential?.isActive && !!googleCredential.refreshTokenEnc;
+      const connected = hasActiveGoogle && !!calendar;
+
       res.json({
-        connected: !!calendar,
-        calendarId: calendar?.calendarId ?? null,
-        calendarEmail: calendar?.calendarEmail ?? null,
-        platform: calendar?.platform ?? null,
+        connected,
+        calendarId: connected ? (calendar?.calendarId ?? null) : null,
+        calendarEmail: connected
+          ? (googleCredential?.providerEmail ?? calendar?.calendarEmail ?? null)
+          : null,
+        platform: connected ? (calendar?.platform ?? null) : null,
       });
     },
   );
